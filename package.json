@@ -1,0 +1,13 @@
+{
+  "name": "radio-calico",
+  "version": "1.0.0",
+  "description": "Radio Calico HLS Stream Player",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": ["radio", "hls", "stream"],
+  "author": "",
+  "license": "ISC"
+}
