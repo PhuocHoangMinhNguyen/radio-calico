@@ -1,7 +1,11 @@
 import { Injectable, signal, computed } from '@angular/core';
 import Hls from 'hls.js';
+import { TrackInfo, StreamMetadata } from '../models/track-info';
 
 export type PlayerStatus = 'initializing' | 'ready' | 'playing' | 'paused' | 'buffering' | 'error';
+
+const METADATA_URL = 'https://d3d4yli4hf5bmh.cloudfront.net/metadatav2.json';
+const METADATA_POLL_INTERVAL = 10_000;
 
 @Injectable({
   providedIn: 'root'
@@ -9,6 +13,7 @@ export type PlayerStatus = 'initializing' | 'ready' | 'playing' | 'paused' | 'bu
 export class HlsPlayerService {
   private hls: Hls | null = null;
   private audioElement: HTMLAudioElement | null = null;
+  private metadataIntervalId: ReturnType<typeof setInterval> | null = null;
 
   // Writable signals for internal state management
   private _isPlaying = signal<boolean>(false);
@@ -16,6 +21,8 @@ export class HlsPlayerService {
   private _status = signal<PlayerStatus>('initializing');
   private _statusMessage = signal<string>('Initializing...');
   private _errorMessage = signal<string>('');
+  private _currentTrack = signal<TrackInfo | null>(null);
+  private _recentlyPlayed = signal<TrackInfo[]>([]);
 
   // Public readonly signals
   readonly isPlaying = this._isPlaying.asReadonly();
@@ -23,12 +30,15 @@ export class HlsPlayerService {
   readonly status = this._status.asReadonly();
   readonly statusMessage = this._statusMessage.asReadonly();
   readonly errorMessage = this._errorMessage.asReadonly();
+  readonly currentTrack = this._currentTrack.asReadonly();
+  readonly recentlyPlayed = this._recentlyPlayed.asReadonly();
 
-  // Computed signal for status CSS class
+  // Computed signals
   readonly statusClass = computed(() => {
     const status = this._status();
     return status === 'playing' ? 'playing' : status === 'error' ? 'error' : '';
   });
+  readonly hasTrackInfo = computed(() => this._currentTrack() !== null);
 
   /**
    * Initialize the HLS player with an audio element and stream URL
@@ -49,6 +59,9 @@ export class HlsPlayerService {
     } else {
       this.handleError('HLS not supported in this browser');
     }
+
+    // Start polling for track metadata
+    this.startMetadataPolling();
   }
 
   /**
@@ -146,6 +159,42 @@ export class HlsPlayerService {
   }
 
   /**
+   * Start polling the metadata endpoint for track info
+   */
+  private startMetadataPolling(): void {
+    this.fetchMetadata();
+    this.metadataIntervalId = setInterval(() => this.fetchMetadata(), METADATA_POLL_INTERVAL);
+  }
+
+  /**
+   * Fetch track metadata from the JSON endpoint
+   */
+  private async fetchMetadata(): Promise<void> {
+    try {
+      const response = await fetch(METADATA_URL, { cache: 'no-store' });
+      if (!response.ok) return;
+      const data: StreamMetadata = await response.json();
+
+      this._currentTrack.set({
+        title: data.title,
+        artist: data.artist,
+      });
+
+      const prev: TrackInfo[] = [];
+      for (let i = 1; i <= 5; i++) {
+        const title = data[`prev_title_${i}` as keyof StreamMetadata] as string;
+        const artist = data[`prev_artist_${i}` as keyof StreamMetadata] as string;
+        if (title && artist) {
+          prev.push({ title, artist });
+        }
+      }
+      this._recentlyPlayed.set(prev);
+    } catch (e) {
+      console.warn('Failed to fetch track metadata:', e);
+    }
+  }
+
+  /**
    * Play the audio stream
    */
   play(): void {
@@ -201,6 +250,10 @@ export class HlsPlayerService {
    * Cleanup resources
    */
   destroy(): void {
+    if (this.metadataIntervalId !== null) {
+      clearInterval(this.metadataIntervalId);
+      this.metadataIntervalId = null;
+    }
     if (this.hls) {
       this.hls.destroy();
       this.hls = null;

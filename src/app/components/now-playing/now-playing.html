@@ -1,0 +1,9 @@
+<div class="now-playing">
+  <span class="label">Now Playing</span>
+  @if (hasTrackInfo()) {
+    <p class="track-title">{{ currentTrack()!.title }}</p>
+    <p class="track-artist">{{ currentTrack()!.artist }}</p>
+  } @else {
+    <p class="track-title placeholder">Waiting for track info...</p>
+  }
+</div>
