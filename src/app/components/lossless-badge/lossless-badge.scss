@@ -1,0 +1,21 @@
+.lossless-badge {
+  background: linear-gradient(135deg, #4a9594 0%, #3a7574 100%);
+  color: #fff;
+  padding: 15px 25px;
+  border-radius: 12px;
+  text-align: center;
+  margin-bottom: 30px;
+  box-shadow: 0 4px 15px rgba(74, 149, 148, 0.3);
+
+  h2 {
+    font-size: 1.3em;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+
+  p {
+    font-size: 0.95em;
+    font-weight: 300;
+    color: #d5efca;
+  }
+}

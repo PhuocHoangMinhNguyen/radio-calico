@@ -1,0 +1,39 @@
+/* Radio Calico - Global Styles */
+
+/* Import Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/icon?family=Material+Icons');
+
+/* CSS Reset */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* Global Styles */
+body {
+  font-family: 'Poppins', sans-serif;
+  background: #313131;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  color: #fff;
+}
+
+html, body {
+  height: 100%;
+}
+
+/* CSS Custom Properties for Theme */
+:root {
+  --primary-color: #4a9594;
+  --primary-dark: #3a7574;
+  --background-dark: #313131;
+  --background-medium: #484848;
+  --background-light: #3a3a3a;
+  --text-light: #cbcbcb;
+  --text-accent: #d5efca;
+  --border-color: #555;
+  --error-color: #ff6b6b;
+}

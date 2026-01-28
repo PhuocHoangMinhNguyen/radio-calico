@@ -1,0 +1,18 @@
+.status-display {
+  text-align: center;
+  padding: 15px;
+  background: #313131;
+  border-radius: 8px;
+  font-size: 0.95em;
+  color: #cbcbcb;
+  font-weight: 400;
+
+  &.playing {
+    color: #4a9594;
+    font-weight: 500;
+  }
+
+  &.error {
+    color: #ff6b6b;
+  }
+}

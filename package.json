@@ -1,13 +1,48 @@
 {
   "name": "radio-calico",
-  "version": "1.0.0",
-  "description": "Radio Calico HLS Stream Player",
-  "main": "server.js",
+  "version": "0.0.0",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node server.js"
+    "ng": "ng",
+    "start": "ng serve --port 3000 --open",
+    "build": "ng build",
+    "build:prod": "ng build --configuration production",
+    "watch": "ng build --watch --configuration development",
+    "test": "ng test",
+    "test:headless": "ng test --watch=false",
+    "serve:prod": "npm run build:prod && node server.js"
   },
-  "keywords": ["radio", "hls", "stream"],
-  "author": "",
-  "license": "ISC"
+  "prettier": {
+    "printWidth": 100,
+    "singleQuote": true,
+    "overrides": [
+      {
+        "files": "*.html",
+        "options": {
+          "parser": "angular"
+        }
+      }
+    ]
+  },
+  "private": true,
+  "packageManager": "npm@11.6.2",
+  "dependencies": {
+    "@angular/common": "^21.1.0",
+    "@angular/compiler": "^21.1.0",
+    "@angular/core": "^21.1.0",
+    "@angular/forms": "^21.1.0",
+    "@angular/platform-browser": "^21.1.0",
+    "@angular/router": "^21.1.0",
+    "@types/hls.js": "^0.13.3",
+    "hls.js": "^1.6.15",
+    "rxjs": "~7.8.0",
+    "tslib": "^2.3.0"
+  },
+  "devDependencies": {
+    "@angular/build": "^21.1.1",
+    "@angular/cli": "^21.1.1",
+    "@angular/compiler-cli": "^21.1.0",
+    "jsdom": "^27.1.0",
+    "typescript": "~5.9.2",
+    "vitest": "^4.0.8"
+  }
 }

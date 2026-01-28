@@ -1,0 +1,46 @@
+.player-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 25px;
+  margin-bottom: 25px;
+}
+
+.control-btn {
+  background: #4a9594;
+  border: none;
+  border-radius: 50%;
+  width: 60px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(74, 149, 148, 0.4);
+
+  &:hover {
+    background: #5ab5b4;
+    transform: scale(1.05);
+  }
+
+  &:active {
+    transform: scale(0.95);
+  }
+
+  .material-icons {
+    font-size: 36px;
+    color: #fff;
+  }
+}
+
+@media (max-width: 640px) {
+  .control-btn {
+    width: 55px;
+    height: 55px;
+
+    .material-icons {
+      font-size: 32px;
+    }
+  }
+}
