@@ -5,6 +5,7 @@ import { TrackInfo, StreamMetadata } from '../models/track-info';
 export type PlayerStatus = 'initializing' | 'ready' | 'playing' | 'paused' | 'buffering' | 'error';
 
 const METADATA_URL = 'https://d3d4yli4hf5bmh.cloudfront.net/metadatav2.json';
+const COVER_URL = 'https://d3d4yli4hf5bmh.cloudfront.net/cover.jpg';
 const METADATA_POLL_INTERVAL = 10_000;
 
 @Injectable({
@@ -23,6 +24,7 @@ export class HlsPlayerService {
   private _errorMessage = signal<string>('');
   private _currentTrack = signal<TrackInfo | null>(null);
   private _recentlyPlayed = signal<TrackInfo[]>([]);
+  private _coverUrl = signal<string | null>(null);
 
   // Public readonly signals
   readonly isPlaying = this._isPlaying.asReadonly();
@@ -32,6 +34,7 @@ export class HlsPlayerService {
   readonly errorMessage = this._errorMessage.asReadonly();
   readonly currentTrack = this._currentTrack.asReadonly();
   readonly recentlyPlayed = this._recentlyPlayed.asReadonly();
+  readonly coverUrl = this._coverUrl.asReadonly();
 
   // Computed signals
   readonly statusClass = computed(() => {
@@ -175,10 +178,17 @@ export class HlsPlayerService {
       if (!response.ok) return;
       const data: StreamMetadata = await response.json();
 
+      const current = this._currentTrack();
+      const trackChanged = !current || current.title !== data.title || current.artist !== data.artist;
+
       this._currentTrack.set({
         title: data.title,
         artist: data.artist,
       });
+
+      if (trackChanged) {
+        this._coverUrl.set(`${COVER_URL}?t=${Date.now()}`);
+      }
 
       const prev: TrackInfo[] = [];
       for (let i = 1; i <= 5; i++) {

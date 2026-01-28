@@ -12,4 +12,5 @@ export class NowPlaying {
 
   currentTrack = this.hlsService.currentTrack;
   hasTrackInfo = this.hlsService.hasTrackInfo;
+  coverUrl = this.hlsService.coverUrl;
 }
