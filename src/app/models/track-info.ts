@@ -3,6 +3,11 @@ export interface TrackInfo {
   artist: string;
 }
 
+export interface SongRatings {
+  thumbs_up: number;
+  thumbs_down: number;
+}
+
 export interface StreamMetadata {
   title: string;
   artist: string;

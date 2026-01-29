@@ -6,11 +6,12 @@ import { VolumeControl } from '../volume-control/volume-control';
 import { StatusDisplay } from '../status-display/status-display';
 import { StreamInfo } from '../stream-info/stream-info';
 import { NowPlaying } from '../now-playing/now-playing';
+import { SongRating } from '../song-rating/song-rating';
 import { RecentlyPlayed } from '../recently-played/recently-played';
 
 @Component({
   selector: 'app-player',
-  imports: [LosslessBadge, AudioControls, VolumeControl, StatusDisplay, StreamInfo, NowPlaying, RecentlyPlayed],
+  imports: [LosslessBadge, AudioControls, VolumeControl, StatusDisplay, StreamInfo, NowPlaying, SongRating, RecentlyPlayed],
   templateUrl: './player.html',
   styleUrl: './player.scss',
 })

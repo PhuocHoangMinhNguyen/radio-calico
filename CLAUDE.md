@@ -31,9 +31,13 @@ App → Header
         → VolumeControl (slider bound to HlsPlayerService.setVolume)
         → StatusDisplay (reactive status message + CSS class)
         → StreamInfo (static format info)
+        → NowPlaying (current track title/artist + album art)
+        → RecentlyPlayed (last 5 tracks from metadata)
 ```
 
 **HLS streaming** is managed entirely in `HlsPlayerService` using HLS.js with automatic fallback to native HLS (Safari). Error recovery handles both network and media errors.
+
+**Track metadata** is polled every 10 seconds from a CloudFront JSON endpoint (`metadatav2.json`). The `StreamMetadata` model (in `src/app/models/track-info.ts`) includes current track info, up to 5 previous tracks, and flags like `is_new`, `is_summer`, `is_vidgames`. Album art is fetched from a separate `cover.jpg` endpoint with cache-busting on track changes.
 
 **Production server** (`server.js`) is a plain Express server with SPA fallback routing to `index.html`.
 

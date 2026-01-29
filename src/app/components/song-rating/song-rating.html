@@ -1,0 +1,24 @@
+@if (hasTrackInfo()) {
+  <div class="song-rating">
+    <button
+      class="rate-btn thumbs-up"
+      [class.active]="userRating() === 'up'"
+      [class.disabled]="userRating() !== null"
+      [disabled]="userRating() !== null"
+      (click)="onRate('up')"
+    >
+      <span class="material-icons">thumb_up</span>
+      <span class="count">{{ ratings().thumbs_up }}</span>
+    </button>
+    <button
+      class="rate-btn thumbs-down"
+      [class.active]="userRating() === 'down'"
+      [class.disabled]="userRating() !== null"
+      [disabled]="userRating() !== null"
+      (click)="onRate('down')"
+    >
+      <span class="material-icons">thumb_down</span>
+      <span class="count">{{ ratings().thumbs_down }}</span>
+    </button>
+  </div>
+}
