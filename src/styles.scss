@@ -1,8 +1,50 @@
-/* Radio Calico - Global Styles */
+/* Radio Calico - Global Styles (Spotify-inspired) */
 
 /* Import Google Fonts */
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap');
 @import url('https://fonts.googleapis.com/icon?family=Material+Icons');
+
+/* CSS Custom Properties for Theme */
+:root {
+  /* Spotify Color Palette */
+  --primary-color: #1DB954;
+  --primary-hover: #1ed760;
+  --primary-dark: #169c46;
+
+  /* Background hierarchy (darker to lighter) */
+  --background-base: #121212;
+  --background-sidebar: #000000;
+  --background-elevated: #181818;
+  --background-highlight: #282828;
+  --background-press: #333333;
+
+  /* Text colors */
+  --text-primary: #ffffff;
+  --text-secondary: #b3b3b3;
+  --text-subdued: #6a6a6a;
+
+  /* Semantic colors */
+  --border-color: #282828;
+  --error-color: #e91429;
+  --success-color: #1DB954;
+
+  /* Layout dimensions */
+  --sidebar-width: 240px;
+  --player-bar-height: 90px;
+
+  /* Spacing */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+
+  /* Border radius */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-full: 50%;
+}
 
 /* CSS Reset */
 * {
@@ -12,28 +54,41 @@
 }
 
 /* Global Styles */
-body {
-  font-family: 'Poppins', sans-serif;
-  background: #313131;
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  color: #fff;
-}
-
 html, body {
   height: 100%;
 }
 
-/* CSS Custom Properties for Theme */
-:root {
-  --primary-color: #4a9594;
-  --primary-dark: #3a7574;
-  --background-dark: #313131;
-  --background-medium: #484848;
-  --background-light: #3a3a3a;
-  --text-light: #cbcbcb;
-  --text-accent: #d5efca;
-  --border-color: #555;
-  --error-color: #ff6b6b;
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+  background: var(--background-base);
+  min-height: 100vh;
+  color: var(--text-primary);
+  overflow: hidden;
+}
+
+/* Spotify-style scrollbar */
+::-webkit-scrollbar {
+  width: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsla(0, 0%, 100%, 0.3);
+  border-radius: 6px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsla(0, 0%, 100%, 0.5);
+  background-clip: content-box;
+}
+
+/* Firefox scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: hsla(0, 0%, 100%, 0.3) transparent;
 }

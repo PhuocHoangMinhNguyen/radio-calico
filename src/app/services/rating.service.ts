@@ -22,7 +22,11 @@ export class RatingService {
       const response = await fetch(`/api/ratings?${params}`);
       if (!response.ok) return;
       const data: SongRatings = await response.json();
-      this._ratings.set(data);
+      this._ratings.set({ thumbs_up: data.thumbs_up, thumbs_down: data.thumbs_down });
+      // Server's IP-based vote takes precedence over localStorage
+      if (data.user_vote) {
+        this._userRating.set(data.user_vote);
+      }
     } catch (e) {
       console.warn('Failed to fetch ratings:', e);
     }
@@ -35,10 +39,17 @@ export class RatingService {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title, artist, rating }),
       });
-      if (!response.ok) return;
       const data: SongRatings = await response.json();
-      this._ratings.set(data);
-      this._userRating.set(rating);
+      if (response.status === 409) {
+        // Already voted (from different browser/cleared localStorage)
+        if (data.user_vote) {
+          this._userRating.set(data.user_vote);
+        }
+        return;
+      }
+      if (!response.ok) return;
+      this._ratings.set({ thumbs_up: data.thumbs_up, thumbs_down: data.thumbs_down });
+      this._userRating.set(data.user_vote || rating);
       localStorage.setItem(`${STORAGE_PREFIX}${title}::${artist}`, rating);
     } catch (e) {
       console.warn('Failed to submit rating:', e);

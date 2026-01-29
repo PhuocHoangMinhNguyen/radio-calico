@@ -1,7 +1,49 @@
+.app-container {
+  display: grid;
+  grid-template-columns: var(--sidebar-width) 1fr;
+  grid-template-rows: 1fr var(--player-bar-height);
+  grid-template-areas:
+    'sidebar main'
+    'player  player';
+  height: 100vh;
+  overflow: hidden;
+}
+
+.sidebar {
+  grid-area: sidebar;
+  overflow-y: auto;
+}
+
 .main-content {
-  flex: 1;
+  grid-area: main;
+  background: var(--background-base);
+  overflow: hidden;
   display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 40px 20px;
+  flex-direction: column;
+}
+
+.main-scroll-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--spacing-lg);
+}
+
+.player-bar {
+  grid-area: player;
+  background: var(--background-elevated);
+  border-top: 1px solid var(--border-color);
+}
+
+/* Responsive: collapse sidebar on mobile */
+@media (max-width: 768px) {
+  .app-container {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      'main'
+      'player';
+  }
+
+  .sidebar {
+    display: none;
+  }
 }

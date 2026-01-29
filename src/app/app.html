@@ -1,5 +1,12 @@
-<app-header />
+<div class="app-container">
+  <app-sidebar class="sidebar" />
 
-<main class="main-content">
-  <app-player />
-</main>
+  <main class="main-content">
+    <div class="main-scroll-container">
+      <app-now-playing-hero />
+      <app-recently-played />
+    </div>
+  </main>
+
+  <app-player-bar class="player-bar" />
+</div>

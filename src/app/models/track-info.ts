@@ -6,6 +6,7 @@ export interface TrackInfo {
 export interface SongRatings {
   thumbs_up: number;
   thumbs_down: number;
+  user_vote?: 'up' | 'down' | null;
 }
 
 export interface StreamMetadata {

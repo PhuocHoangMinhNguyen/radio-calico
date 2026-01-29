@@ -10,7 +10,8 @@
       "Bash(where:*)",
       "Bash(\"C:/Program Files/PostgreSQL/14/bin/pg_isready\" -h localhost -p 5432)",
       "Bash(winget:*)",
-      "Bash(\"/c/Program Files/PostgreSQL/18/bin/psql\" -U postgres -c \"SELECT version\\(\\);\")"
+      "Bash(\"/c/Program Files/PostgreSQL/18/bin/psql\" -U postgres -c \"SELECT version\\(\\);\")",
+      "WebFetch(domain:open.spotify.com)"
     ]
   }
 }

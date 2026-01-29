@@ -1,13 +1,18 @@
 @if (recentlyPlayed().length > 0) {
-  <div class="recently-played">
-    <span class="label">Recently Played</span>
-    <ul>
+  <section class="recently-played-section">
+    <h2 class="section-title">Recently Played</h2>
+    <div class="tracks-grid">
       @for (track of recentlyPlayed(); track $index) {
-        <li>
-          <span class="track-title">{{ track.title }}</span>
-          <span class="track-artist">{{ track.artist }}</span>
-        </li>
+        <div class="track-card">
+          <div class="track-card-art">
+            <span class="material-icons">music_note</span>
+          </div>
+          <div class="track-card-info">
+            <span class="track-title">{{ track.title }}</span>
+            <span class="track-artist">{{ track.artist }}</span>
+          </div>
+        </div>
       }
-    </ul>
-  </div>
+    </div>
+  </section>
 }

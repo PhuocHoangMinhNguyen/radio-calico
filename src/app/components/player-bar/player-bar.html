@@ -1,0 +1,46 @@
+<audio #audioPlayer class="audio-player">
+  Your browser does not support the audio element.
+</audio>
+
+<div class="player-bar-container">
+  <!-- Left: Track Info -->
+  <div class="track-info">
+    @if (hasTrackInfo()) {
+      @if (coverUrl()) {
+        <img [src]="coverUrl()" alt="Album art" class="track-cover" />
+      }
+      <div class="track-details">
+        <span class="track-title">{{ currentTrack()!.title }}</span>
+        <span class="track-artist">{{ currentTrack()!.artist }}</span>
+      </div>
+    } @else {
+      <div class="track-details">
+        <span class="track-title placeholder">{{ statusMessage() }}</span>
+      </div>
+    }
+  </div>
+
+  <!-- Center: Playback Controls -->
+  <div class="playback-controls">
+    <button class="play-btn" (click)="onTogglePlayPause()">
+      @if (isPlaying()) {
+        <span class="material-icons">pause</span>
+      } @else {
+        <span class="material-icons">play_arrow</span>
+      }
+    </button>
+  </div>
+
+  <!-- Right: Volume -->
+  <div class="volume-section">
+    <span class="material-icons volume-icon">volume_up</span>
+    <input
+      type="range"
+      min="0"
+      max="100"
+      [value]="volume() * 100"
+      class="volume-slider"
+      (input)="onVolumeChange($event)"
+    />
+  </div>
+</div>

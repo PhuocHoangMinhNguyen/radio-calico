@@ -1,18 +1,17 @@
 .footer-info {
-  margin-top: 30px;
-  padding-top: 25px;
-  border-top: 1px solid #555;
-  text-align: center;
+  padding: var(--spacing-md);
+  background: var(--background-elevated);
+  border-radius: var(--radius-md);
 
   p {
-    color: #cbcbcb;
-    font-size: 0.85em;
-    margin: 8px 0;
-    font-weight: 300;
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    margin: var(--spacing-xs) 0;
+    font-weight: 400;
   }
 
   strong {
-    color: #4a9594;
+    color: var(--primary-color);
     font-weight: 500;
   }
 }

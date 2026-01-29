@@ -4,6 +4,14 @@ const fs = require('fs');
 const path = require('path');
 const { Pool } = require('pg');
 
+// Prevent crashes from unhandled errors
+process.on('uncaughtException', (err) => {
+    console.error('Uncaught Exception:', err);
+});
+process.on('unhandledRejection', (err) => {
+    console.error('Unhandled Rejection:', err);
+});
+
 const DIST_DIR = path.join(__dirname, 'dist', 'radio-calico', 'browser');
 const isProduction = fs.existsSync(path.join(DIST_DIR, 'index.html'));
 const PORT = process.env.PORT || (isProduction ? 3000 : 3001);
@@ -14,6 +22,11 @@ const pool = new Pool({
     database: process.env.PGDATABASE || 'radio_calico',
     user: process.env.PGUSER || 'postgres',
     password: process.env.PGPASSWORD,
+});
+
+// Log pool errors
+pool.on('error', (err) => {
+    console.error('Pool error:', err);
 });
 
 const mimeTypes = {
@@ -42,6 +55,12 @@ function sendJson(res, statusCode, data) {
     res.end(JSON.stringify(data));
 }
 
+function getClientIp(req) {
+    return req.headers['x-forwarded-for']?.split(',')[0].trim() ||
+           req.socket.remoteAddress ||
+           'unknown';
+}
+
 const server = http.createServer(async (req, res) => {
     console.log(`${req.method} ${req.url}`);
 
@@ -55,15 +74,29 @@ const server = http.createServer(async (req, res) => {
             return sendJson(res, 400, { error: 'title and artist are required' });
         }
         try {
-            const result = await pool.query(
-                'SELECT thumbs_up, thumbs_down FROM song_ratings WHERE song_title = $1 AND song_artist = $2',
-                [title, artist]
-            );
-            const row = result.rows[0] || { thumbs_up: 0, thumbs_down: 0 };
-            return sendJson(res, 200, { thumbs_up: row.thumbs_up, thumbs_down: row.thumbs_down });
+            const clientIp = getClientIp(req);
+            console.log('Client IP:', clientIp, '| Title:', title, '| Artist:', artist);
+            const [ratingsResult, voteResult] = await Promise.all([
+                pool.query(
+                    'SELECT thumbs_up, thumbs_down FROM song_ratings WHERE song_title = $1 AND song_artist = $2',
+                    [title, artist]
+                ),
+                pool.query(
+                    'SELECT vote FROM song_votes WHERE song_title = $1 AND song_artist = $2 AND ip_address = $3',
+                    [title, artist, clientIp]
+                )
+            ]);
+            const ratings = ratingsResult.rows[0] || { thumbs_up: 0, thumbs_down: 0 };
+            const userVote = voteResult.rows[0]?.vote || null;
+            return sendJson(res, 200, {
+                thumbs_up: ratings.thumbs_up,
+                thumbs_down: ratings.thumbs_down,
+                user_vote: userVote
+            });
         } catch (err) {
-            console.error('DB error (GET /api/ratings):', err);
-            return sendJson(res, 500, { error: 'Database error' });
+            console.error('DB error (GET /api/ratings):', err.message);
+            console.error('Full error:', err);
+            return sendJson(res, 500, { error: 'Database error', details: err.message });
         }
     }
 
@@ -75,6 +108,25 @@ const server = http.createServer(async (req, res) => {
             if (!title || !artist || (rating !== 'up' && rating !== 'down')) {
                 return sendJson(res, 400, { error: 'title, artist, and rating ("up" or "down") are required' });
             }
+
+            const clientIp = getClientIp(req);
+
+            // Check if this IP has already voted for this song
+            const existingVote = await pool.query(
+                'SELECT vote FROM song_votes WHERE song_title = $1 AND song_artist = $2 AND ip_address = $3',
+                [title, artist, clientIp]
+            );
+            if (existingVote.rows.length > 0) {
+                return sendJson(res, 409, { error: 'Already voted', user_vote: existingVote.rows[0].vote });
+            }
+
+            // Record the vote
+            await pool.query(
+                'INSERT INTO song_votes (song_title, song_artist, ip_address, vote) VALUES ($1, $2, $3, $4)',
+                [title, artist, clientIp, rating]
+            );
+
+            // Update aggregate counts
             const column = rating === 'up' ? 'thumbs_up' : 'thumbs_down';
             const result = await pool.query(
                 `INSERT INTO song_ratings (song_title, song_artist, ${column})
@@ -84,7 +136,11 @@ const server = http.createServer(async (req, res) => {
                  RETURNING thumbs_up, thumbs_down`,
                 [title, artist]
             );
-            return sendJson(res, 200, { thumbs_up: result.rows[0].thumbs_up, thumbs_down: result.rows[0].thumbs_down });
+            return sendJson(res, 200, {
+                thumbs_up: result.rows[0].thumbs_up,
+                thumbs_down: result.rows[0].thumbs_down,
+                user_vote: rating
+            });
         } catch (err) {
             console.error('DB error (POST /api/ratings):', err);
             return sendJson(res, 500, { error: 'Database error' });

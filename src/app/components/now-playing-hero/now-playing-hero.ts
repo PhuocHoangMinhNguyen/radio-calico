@@ -1,13 +1,14 @@
 import { Component, inject } from '@angular/core';
 import { HlsPlayerService } from '../../services/hls-player.service';
+import { SongRating } from '../song-rating/song-rating';
 
 @Component({
-  selector: 'app-now-playing',
-  imports: [],
-  templateUrl: './now-playing.html',
-  styleUrl: './now-playing.scss',
+  selector: 'app-now-playing-hero',
+  imports: [SongRating],
+  templateUrl: './now-playing-hero.html',
+  styleUrl: './now-playing-hero.scss',
 })
-export class NowPlaying {
+export class NowPlayingHero {
   private hlsService = inject(HlsPlayerService);
 
   currentTrack = this.hlsService.currentTrack;
