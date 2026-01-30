@@ -27,7 +27,16 @@
   }
 }
 
-.track-card-art {
+img.track-card-art {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--spacing-md);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.track-card-art.placeholder {
   width: 100%;
   aspect-ratio: 1;
   background: var(--background-highlight);

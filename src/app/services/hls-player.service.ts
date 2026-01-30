@@ -243,14 +243,14 @@ export class HlsPlayerService {
       const data: StreamMetadata = await response.json();
 
       const current = this._currentTrack();
-      const trackChanged = !current || current.title !== data.title || current.artist !== data.artist;
+      const trackChanged =
+        !current || current.title !== data.title || current.artist !== data.artist;
 
       const newTrack: TrackInfo = {
         title: data.title,
         artist: data.artist,
         album: data.album,
       };
-      this._currentTrack.set(newTrack);
 
       if (trackChanged) {
         const newCoverUrl = `${COVER_URL}?t=${Date.now()}`;
@@ -258,15 +258,23 @@ export class HlsPlayerService {
         this.updateMediaSessionMetadata(newTrack, newCoverUrl);
       }
 
-      const prev: TrackInfo[] = [];
-      for (let i = 1; i <= 5; i++) {
-        const title = data[`prev_title_${i}` as keyof StreamMetadata] as string;
-        const artist = data[`prev_artist_${i}` as keyof StreamMetadata] as string;
-        if (title && artist) {
-          prev.push({ title, artist });
+      this._currentTrack.set(newTrack);
+
+      // Build recently played list from metadata's previous tracks
+      const recentTracks: TrackInfo[] = [];
+      const prevData = [
+        { title: data.prev_title_1, artist: data.prev_artist_1 },
+        { title: data.prev_title_2, artist: data.prev_artist_2 },
+        { title: data.prev_title_3, artist: data.prev_artist_3 },
+        { title: data.prev_title_4, artist: data.prev_artist_4 },
+        { title: data.prev_title_5, artist: data.prev_artist_5 },
+      ];
+      for (const track of prevData) {
+        if (track.title && track.artist) {
+          recentTracks.push({ title: track.title, artist: track.artist });
         }
       }
-      this._recentlyPlayed.set(prev);
+      this._recentlyPlayed.set(recentTracks);
     } catch (e) {
       console.warn('Failed to fetch track metadata:', e);
     }

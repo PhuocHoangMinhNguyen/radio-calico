@@ -4,9 +4,13 @@
     <div class="tracks-grid">
       @for (track of recentlyPlayed(); track $index) {
         <div class="track-card">
-          <div class="track-card-art">
-            <span class="material-icons">music_note</span>
-          </div>
+          @if (track.coverUrl) {
+            <img [src]="track.coverUrl" alt="Album art" class="track-card-art" />
+          } @else {
+            <div class="track-card-art placeholder">
+              <span class="material-icons">music_note</span>
+            </div>
+          }
           <div class="track-card-info">
             <span class="track-title">{{ track.title }}</span>
             <span class="track-artist">{{ track.artist }}</span>

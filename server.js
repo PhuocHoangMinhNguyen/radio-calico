@@ -116,11 +116,48 @@ const server = http.createServer(async (req, res) => {
                 'SELECT vote FROM song_votes WHERE song_title = $1 AND song_artist = $2 AND ip_address = $3',
                 [title, artist, clientIp]
             );
+
             if (existingVote.rows.length > 0) {
-                return sendJson(res, 409, { error: 'Already voted', user_vote: existingVote.rows[0].vote });
+                const oldVote = existingVote.rows[0].vote;
+
+                // If same vote, return current state
+                if (oldVote === rating) {
+                    const current = await pool.query(
+                        'SELECT thumbs_up, thumbs_down FROM song_ratings WHERE song_title = $1 AND song_artist = $2',
+                        [title, artist]
+                    );
+                    const ratings = current.rows[0] || { thumbs_up: 0, thumbs_down: 0 };
+                    return sendJson(res, 200, {
+                        thumbs_up: ratings.thumbs_up,
+                        thumbs_down: ratings.thumbs_down,
+                        user_vote: rating
+                    });
+                }
+
+                // Change vote: update the vote record
+                await pool.query(
+                    'UPDATE song_votes SET vote = $1 WHERE song_title = $2 AND song_artist = $3 AND ip_address = $4',
+                    [rating, title, artist, clientIp]
+                );
+
+                // Update aggregate counts: decrement old, increment new
+                const oldColumn = oldVote === 'up' ? 'thumbs_up' : 'thumbs_down';
+                const newColumn = rating === 'up' ? 'thumbs_up' : 'thumbs_down';
+                const result = await pool.query(
+                    `UPDATE song_ratings
+                     SET ${oldColumn} = GREATEST(0, ${oldColumn} - 1), ${newColumn} = ${newColumn} + 1
+                     WHERE song_title = $1 AND song_artist = $2
+                     RETURNING thumbs_up, thumbs_down`,
+                    [title, artist]
+                );
+                return sendJson(res, 200, {
+                    thumbs_up: result.rows[0].thumbs_up,
+                    thumbs_down: result.rows[0].thumbs_down,
+                    user_vote: rating
+                });
             }
 
-            // Record the vote
+            // New vote: record the vote
             await pool.query(
                 'INSERT INTO song_votes (song_title, song_artist, ip_address, vote) VALUES ($1, $2, $3, $4)',
                 [title, artist, clientIp, rating]

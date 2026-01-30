@@ -5,8 +5,10 @@ import {
   ElementRef,
   ViewChild,
   AfterViewInit,
+  computed,
 } from '@angular/core';
 import { HlsPlayerService } from '../../services/hls-player.service';
+import { KeyboardShortcutService } from '../../services/keyboard-shortcut.service';
 
 @Component({
   selector: 'app-player-bar',
@@ -16,6 +18,7 @@ import { HlsPlayerService } from '../../services/hls-player.service';
 })
 export class PlayerBar implements AfterViewInit, OnDestroy {
   private hlsService = inject(HlsPlayerService);
+  private keyboardService = inject(KeyboardShortcutService);
 
   @ViewChild('audioPlayer') audioPlayerRef!: ElementRef<HTMLAudioElement>;
 
@@ -28,6 +31,16 @@ export class PlayerBar implements AfterViewInit, OnDestroy {
   hasTrackInfo = this.hlsService.hasTrackInfo;
   coverUrl = this.hlsService.coverUrl;
   statusMessage = this.hlsService.statusMessage;
+  isMuted = this.keyboardService.isMuted;
+
+  // Computed signal for volume icon
+  volumeIcon = computed(() => {
+    const vol = this.volume();
+    if (this.isMuted() || vol === 0) return 'volume_off';
+    if (vol < 0.3) return 'volume_mute';
+    if (vol < 0.7) return 'volume_down';
+    return 'volume_up';
+  });
 
   ngAfterViewInit(): void {
     if (this.audioPlayerRef) {
@@ -46,5 +59,10 @@ export class PlayerBar implements AfterViewInit, OnDestroy {
   onVolumeChange(event: Event): void {
     const input = event.target as HTMLInputElement;
     this.hlsService.setVolume(Number(input.value));
+  }
+
+  onToggleMute(): void {
+    // Simulate pressing 'M' key to toggle mute
+    this.keyboardService.handleKeyboardEvent(new KeyboardEvent('keydown', { key: 'm' }));
   }
 }

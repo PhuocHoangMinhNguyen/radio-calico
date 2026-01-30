@@ -33,6 +33,32 @@ export class RatingService {
   }
 
   async submitRating(title: string, artist: string, rating: 'up' | 'down'): Promise<void> {
+    const currentRating = this._userRating();
+
+    // If clicking the same rating, do nothing (or could implement toggle-off)
+    if (currentRating === rating) {
+      return;
+    }
+
+    // Optimistically update UI
+    const prevRatings = this._ratings();
+    const newRatings = { ...prevRatings };
+
+    // If changing vote, adjust counts
+    if (currentRating) {
+      // Remove old vote
+      if (currentRating === 'up') newRatings.thumbs_up = Math.max(0, newRatings.thumbs_up - 1);
+      else newRatings.thumbs_down = Math.max(0, newRatings.thumbs_down - 1);
+    }
+
+    // Add new vote
+    if (rating === 'up') newRatings.thumbs_up++;
+    else newRatings.thumbs_down++;
+
+    this._ratings.set(newRatings);
+    this._userRating.set(rating);
+    localStorage.setItem(`${STORAGE_PREFIX}${title}::${artist}`, rating);
+
     try {
       const response = await fetch('/api/ratings', {
         method: 'POST',
@@ -40,18 +66,24 @@ export class RatingService {
         body: JSON.stringify({ title, artist, rating }),
       });
       const data: SongRatings = await response.json();
-      if (response.status === 409) {
-        // Already voted (from different browser/cleared localStorage)
+
+      // Update with server response (source of truth)
+      if (response.ok || response.status === 409) {
+        this._ratings.set({ thumbs_up: data.thumbs_up, thumbs_down: data.thumbs_down });
         if (data.user_vote) {
           this._userRating.set(data.user_vote);
+          localStorage.setItem(`${STORAGE_PREFIX}${title}::${artist}`, data.user_vote);
         }
-        return;
       }
-      if (!response.ok) return;
-      this._ratings.set({ thumbs_up: data.thumbs_up, thumbs_down: data.thumbs_down });
-      this._userRating.set(data.user_vote || rating);
-      localStorage.setItem(`${STORAGE_PREFIX}${title}::${artist}`, rating);
     } catch (e) {
+      // Revert on error
+      this._ratings.set(prevRatings);
+      this._userRating.set(currentRating);
+      if (currentRating) {
+        localStorage.setItem(`${STORAGE_PREFIX}${title}::${artist}`, currentRating);
+      } else {
+        localStorage.removeItem(`${STORAGE_PREFIX}${title}::${artist}`);
+      }
       console.warn('Failed to submit rating:', e);
     }
   }

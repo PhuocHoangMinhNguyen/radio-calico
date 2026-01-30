@@ -1,8 +1,15 @@
 .song-rating {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: var(--spacing-md);
   margin-top: var(--spacing-md);
+}
+
+@media (min-width: 769px) {
+  .song-rating {
+    justify-content: flex-start;
+  }
 }
 
 .rate-btn {
@@ -26,7 +33,7 @@
     font-weight: 500;
   }
 
-  &:hover:not(:disabled) {
+  &:hover {
     color: var(--text-primary);
     border-color: var(--text-secondary);
     transform: scale(1.02);
@@ -35,15 +42,20 @@
   &.active.thumbs-up {
     color: var(--primary-color);
     border-color: var(--primary-color);
+    background: rgba(74, 149, 148, 0.1);
+
+    &:hover {
+      background: rgba(74, 149, 148, 0.15);
+    }
   }
 
   &.active.thumbs-down {
     color: var(--error-color);
     border-color: var(--error-color);
-  }
+    background: rgba(229, 62, 62, 0.1);
 
-  &.disabled:not(.active) {
-    opacity: 0.4;
-    cursor: default;
+    &:hover {
+      background: rgba(229, 62, 62, 0.15);
+    }
   }
 }

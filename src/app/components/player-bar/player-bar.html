@@ -32,13 +32,15 @@
   </div>
 
   <!-- Right: Volume -->
-  <div class="volume-section">
-    <span class="material-icons volume-icon">volume_up</span>
+  <div class="volume-section" [class.muted]="isMuted() || volume() === 0">
+    <button class="volume-btn" (click)="onToggleMute()" type="button">
+      <span class="material-icons volume-icon">{{ volumeIcon() }}</span>
+    </button>
     <input
       type="range"
       min="0"
       max="100"
-      [value]="volume() * 100"
+      [value]="isMuted() ? 0 : volume() * 100"
       class="volume-slider"
       (input)="onVolumeChange($event)"
     />

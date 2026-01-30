@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { HlsPlayerService } from './hls-player.service';
 
 describe('HlsPlayerService', () => {

@@ -27,7 +27,7 @@ export class SongRating {
 
   onRate(rating: 'up' | 'down'): void {
     const track = this.hlsService.currentTrack();
-    if (track && !this.userRating()) {
+    if (track) {
       this.ratingService.submitRating(track.title, track.artist, rating);
     }
   }

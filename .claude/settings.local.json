@@ -13,7 +13,8 @@
       "Bash(\"/c/Program Files/PostgreSQL/18/bin/psql\" -U postgres -c \"SELECT version\\(\\);\")",
       "WebFetch(domain:open.spotify.com)",
       "Bash(npm ls:*)",
-      "Bash(npm run build:prod:*)"
+      "Bash(npm run build:prod:*)",
+      "Bash(npx vitest:*)"
     ]
   }
 }
