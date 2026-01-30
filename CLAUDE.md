@@ -47,3 +47,109 @@ App → Header
 - **TypeScript**: Strict mode enabled with `noImplicitOverride`, `noImplicitReturns`, strict templates and injection params
 - **Formatting**: Prettier — 100 char width, single quotes, Angular HTML parser
 - **Template syntax**: Modern Angular control flow (`@if`, `@for`) rather than structural directives
+
+## Feature Roadmap
+
+Features planned to make Radio Calico more modern and production-ready, organized by priority.
+
+### High Priority - Production Essentials
+
+- [x] **1. Media Session API Integration** (COMPLETED)
+  - Lock screen controls on mobile devices
+  - Hardware media keys support (keyboard play/pause/volume)
+  - OS notification center showing track info and album art
+  - Bluetooth headset button support
+  - Location: `HlsPlayerService.setupMediaSession()` and `updateMediaSessionMetadata()`
+
+- [ ] **2. Keyboard Shortcuts**
+  - `Space` — Play/Pause
+  - `↑/↓` — Volume up/down (5% increments)
+  - `M` — Mute toggle
+  - `L` — Like/unlike current track
+  - Location: New `KeyboardShortcutService` + `@HostListener` in app component
+
+- [ ] **3. PWA (Progressive Web App)**
+  - Web App Manifest (`manifest.webmanifest`) for installability
+  - Service Worker for caching static assets
+  - Offline shell with "no connection" message
+  - App icons (192x192, 512x512)
+  - Splash screen configuration
+  - Location: `src/manifest.webmanifest`, `ngsw-config.json`
+
+- [ ] **4. Accessibility (WCAG 2.2 Compliance)**
+  - ARIA labels on all interactive controls
+  - Visible focus indicators (focus ring)
+  - Screen reader announcements for track changes (live regions)
+  - `prefers-reduced-motion` support
+  - Color contrast compliance (4.5:1 minimum)
+  - No auto-play without user interaction
+  - Location: Component templates, `styles.scss`
+
+### Medium Priority - User Engagement
+
+- [ ] **5. Audio Visualization**
+  - Spectrum analyzer/equalizer bars reacting to music
+  - Use Web Audio API `AnalyserNode`
+  - Canvas-based rendering for performance
+  - Location: New `AudioVisualizerComponent`
+
+- [ ] **6. Social Sharing**
+  - Share current track to Twitter/X, Facebook
+  - Copy shareable link to clipboard
+  - Open Graph meta tags for rich previews
+  - Location: New `ShareService`, meta tag updates in `index.html`
+
+- [ ] **7. User Preferences Persistence**
+  - Remember volume level across sessions
+  - Theme preference (dark/light mode toggle)
+  - Store in `localStorage`
+  - Location: New `PreferencesService`
+
+- [ ] **8. Push Notifications**
+  - Request notification permission
+  - Notify on track change (when app is backgrounded)
+  - Notification click returns to app
+  - Location: Extend Service Worker, new `NotificationService`
+
+### Lower Priority - Polish & Extras
+
+- [ ] **9. Sleep Timer**
+  - Auto-stop after 15/30/60/90 minutes
+  - Visual countdown indicator
+  - Location: New `SleepTimerService`, UI in player bar
+
+- [ ] **10. Listening Statistics**
+  - Track total listening time
+  - Display "You've listened for X hours"
+  - Store in `localStorage` or backend
+  - Location: New `StatsService`
+
+- [ ] **11. Theme Customization**
+  - Dark/light mode toggle
+  - Optional: Extract dominant color from album art for adaptive theming
+  - CSS custom properties switching
+  - Location: `ThemeService`, `styles.scss`
+
+- [ ] **12. Stream Quality Indicator**
+  - Show buffer health status
+  - Display current bitrate
+  - Connection quality badge (good/fair/poor)
+  - Location: Extend `HlsPlayerService`, new `StreamQualityComponent`
+
+### Technical/Production Readiness
+
+- [ ] **13. Error Monitoring**
+  - Integrate error tracking (e.g., Sentry)
+  - Log playback errors and recovery attempts
+  - Location: Error boundary service, `main.ts` initialization
+
+- [ ] **14. Performance Optimizations**
+  - Lazy load non-critical components
+  - Image optimization (WebP with fallback)
+  - Preconnect to CDN endpoints
+  - Location: `angular.json`, component lazy loading
+
+- [ ] **15. SEO & Open Graph**
+  - Dynamic meta tags for current track
+  - Structured data (JSON-LD) for rich search results
+  - Location: `index.html`, dynamic updates in `AppComponent`
