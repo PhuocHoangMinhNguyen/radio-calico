@@ -61,12 +61,12 @@ Features planned to make Radio Calico more modern and production-ready, organize
   - Bluetooth headset button support
   - Location: `HlsPlayerService.setupMediaSession()` and `updateMediaSessionMetadata()`
 
-- [ ] **2. Keyboard Shortcuts**
+- [x] **2. Keyboard Shortcuts** (COMPLETED)
   - `Space` — Play/Pause
   - `↑/↓` — Volume up/down (5% increments)
   - `M` — Mute toggle
   - `L` — Like/unlike current track
-  - Location: New `KeyboardShortcutService` + `@HostListener` in app component
+  - Location: `KeyboardShortcutService` + `@HostListener` in `App` component
 
 - [ ] **3. PWA (Progressive Web App)**
   - Web App Manifest (`manifest.webmanifest`) for installability
