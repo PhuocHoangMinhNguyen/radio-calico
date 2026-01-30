@@ -53,6 +53,9 @@ export class HlsPlayerService {
     // Setup audio element event listeners
     this.setupAudioListeners();
 
+    // Setup Media Session API for lock screen/notification controls
+    this.setupMediaSession();
+
     // Check if HLS is supported
     if (Hls.isSupported()) {
       this.initializeHls(streamUrl);
@@ -124,6 +127,67 @@ export class HlsPlayerService {
   }
 
   /**
+   * Setup Media Session API for lock screen and notification controls
+   */
+  private setupMediaSession(): void {
+    if (!('mediaSession' in navigator)) {
+      console.log('Media Session API not supported');
+      return;
+    }
+
+    // Set initial metadata
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: 'Radio Calico',
+      artist: 'Lossless Internet Radio',
+      album: '48kHz / 24-bit FLAC',
+      artwork: [
+        { src: '/icons/icon-192.svg', sizes: '192x192', type: 'image/svg+xml' },
+        { src: '/icons/icon-512.svg', sizes: '512x512', type: 'image/svg+xml' },
+      ],
+    });
+
+    // Set up action handlers
+    navigator.mediaSession.setActionHandler('play', () => {
+      this.play();
+    });
+
+    navigator.mediaSession.setActionHandler('pause', () => {
+      this.pause();
+    });
+
+    navigator.mediaSession.setActionHandler('stop', () => {
+      this.pause();
+    });
+
+    console.log('Media Session API initialized');
+  }
+
+  /**
+   * Update Media Session metadata with current track info
+   */
+  private updateMediaSessionMetadata(track: TrackInfo, coverUrl: string | null): void {
+    if (!('mediaSession' in navigator)) return;
+
+    const artwork: MediaImage[] = coverUrl
+      ? [
+          { src: coverUrl, sizes: '300x300', type: 'image/jpeg' },
+          { src: '/icons/icon-192.svg', sizes: '192x192', type: 'image/svg+xml' },
+          { src: '/icons/icon-512.svg', sizes: '512x512', type: 'image/svg+xml' },
+        ]
+      : [
+          { src: '/icons/icon-192.svg', sizes: '192x192', type: 'image/svg+xml' },
+          { src: '/icons/icon-512.svg', sizes: '512x512', type: 'image/svg+xml' },
+        ];
+
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: track.title,
+      artist: track.artist,
+      album: track.album || 'Radio Calico',
+      artwork,
+    });
+  }
+
+  /**
    * Setup audio element event listeners
    */
   private setupAudioListeners(): void {
@@ -181,13 +245,17 @@ export class HlsPlayerService {
       const current = this._currentTrack();
       const trackChanged = !current || current.title !== data.title || current.artist !== data.artist;
 
-      this._currentTrack.set({
+      const newTrack: TrackInfo = {
         title: data.title,
         artist: data.artist,
-      });
+        album: data.album,
+      };
+      this._currentTrack.set(newTrack);
 
       if (trackChanged) {
-        this._coverUrl.set(`${COVER_URL}?t=${Date.now()}`);
+        const newCoverUrl = `${COVER_URL}?t=${Date.now()}`;
+        this._coverUrl.set(newCoverUrl);
+        this.updateMediaSessionMetadata(newTrack, newCoverUrl);
       }
 
       const prev: TrackInfo[] = [];

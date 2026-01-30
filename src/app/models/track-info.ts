@@ -1,6 +1,7 @@
 export interface TrackInfo {
   title: string;
   artist: string;
+  album?: string;
 }
 
 export interface SongRatings {
