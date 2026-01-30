@@ -6,8 +6,24 @@
   <base href="/">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" type="image/x-icon" href="favicon.ico">
+
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#1a1a2e">
+  <meta name="description" content="Lossless Internet Radio - 48kHz / 24-bit FLAC streaming">
+
+  <!-- iOS PWA -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Radio Calico">
+  <link rel="apple-touch-icon" href="icons/icon-192.svg">
+
+  <!-- Preconnect to CDN -->
+  <link rel="preconnect" href="https://d3d4yli4hf5bmh.cloudfront.net">
+  <link rel="dns-prefetch" href="https://d3d4yli4hf5bmh.cloudfront.net">
 </head>
 <body>
   <app-root></app-root>
+  <noscript>Please enable JavaScript to use Radio Calico.</noscript>
 </body>
 </html>

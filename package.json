@@ -34,6 +34,7 @@
     "@angular/forms": "^21.1.0",
     "@angular/platform-browser": "^21.1.0",
     "@angular/router": "^21.1.0",
+    "@angular/service-worker": "^21.1.1",
     "@types/hls.js": "^0.13.3",
     "dotenv": "^17.2.3",
     "hls.js": "^1.6.15",

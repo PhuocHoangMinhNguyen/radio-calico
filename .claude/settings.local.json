@@ -11,7 +11,9 @@
       "Bash(\"C:/Program Files/PostgreSQL/14/bin/pg_isready\" -h localhost -p 5432)",
       "Bash(winget:*)",
       "Bash(\"/c/Program Files/PostgreSQL/18/bin/psql\" -U postgres -c \"SELECT version\\(\\);\")",
-      "WebFetch(domain:open.spotify.com)"
+      "WebFetch(domain:open.spotify.com)",
+      "Bash(npm ls:*)",
+      "Bash(npm run build:prod:*)"
     ]
   }
 }

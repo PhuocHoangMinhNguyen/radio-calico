@@ -1,0 +1,47 @@
+{
+  "name": "Radio Calico",
+  "short_name": "Radio Calico",
+  "description": "Lossless Internet Radio - 48kHz / 24-bit FLAC streaming",
+  "theme_color": "#1a1a2e",
+  "background_color": "#121212",
+  "display": "standalone",
+  "orientation": "any",
+  "scope": "/",
+  "start_url": "/",
+  "icons": [
+    {
+      "src": "icons/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-maskable.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "categories": ["music", "entertainment"],
+  "shortcuts": [
+    {
+      "name": "Play Radio",
+      "short_name": "Play",
+      "description": "Start playing Radio Calico",
+      "url": "/?action=play",
+      "icons": [
+        {
+          "src": "icons/icon-192.svg",
+          "sizes": "192x192",
+          "type": "image/svg+xml"
+        }
+      ]
+    }
+  ]
+}

@@ -68,13 +68,13 @@ Features planned to make Radio Calico more modern and production-ready, organize
   - `L` — Like/unlike current track
   - Location: `KeyboardShortcutService` + `@HostListener` in `App` component
 
-- [ ] **3. PWA (Progressive Web App)**
+- [x] **3. PWA (Progressive Web App)** (COMPLETED)
   - Web App Manifest (`manifest.webmanifest`) for installability
-  - Service Worker for caching static assets
-  - Offline shell with "no connection" message
-  - App icons (192x192, 512x512)
-  - Splash screen configuration
-  - Location: `src/manifest.webmanifest`, `ngsw-config.json`
+  - Angular Service Worker for caching static assets
+  - iOS PWA meta tags for home screen support
+  - App icons (192x192, 512x512 + maskable)
+  - CDN preconnect for faster streaming
+  - Location: `src/manifest.webmanifest`, `ngsw-config.json`, `src/app/app.config.ts`
 
 - [ ] **4. Accessibility (WCAG 2.2 Compliance)**
   - ARIA labels on all interactive controls
