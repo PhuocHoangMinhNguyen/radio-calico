@@ -81,6 +81,12 @@
     transform: scale(1);
   }
 
+  &:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
+    transform: scale(1.06);
+  }
+
   .material-icons {
     font-size: 24px;
     color: #000;
@@ -119,6 +125,12 @@
   &:hover {
     background: var(--background-highlight);
   }
+
+  &:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
+    background: var(--background-highlight);
+  }
 }
 
 .volume-icon {
@@ -152,6 +164,19 @@
     border-radius: var(--radius-full);
     border: none;
     cursor: pointer;
+  }
+
+  &:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
+
+    &::-webkit-slider-thumb {
+      box-shadow: 0 0 0 3px var(--primary-color);
+    }
+
+    &::-moz-range-thumb {
+      box-shadow: 0 0 0 3px var(--primary-color);
+    }
   }
 }
 

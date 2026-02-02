@@ -22,19 +22,29 @@
 
   <!-- Center: Playback Controls -->
   <div class="playback-controls">
-    <button class="play-btn" (click)="onTogglePlayPause()">
+    <button
+      class="play-btn"
+      type="button"
+      (click)="onTogglePlayPause()"
+      [attr.aria-label]="isPlaying() ? 'Pause' : 'Play'"
+    >
       @if (isPlaying()) {
-        <span class="material-icons">pause</span>
+        <span class="material-icons" aria-hidden="true">pause</span>
       } @else {
-        <span class="material-icons">play_arrow</span>
+        <span class="material-icons" aria-hidden="true">play_arrow</span>
       }
     </button>
   </div>
 
   <!-- Right: Volume -->
   <div class="volume-section" [class.muted]="isMuted() || volume() === 0">
-    <button class="volume-btn" (click)="onToggleMute()" type="button">
-      <span class="material-icons volume-icon">{{ volumeIcon() }}</span>
+    <button
+      class="volume-btn"
+      type="button"
+      (click)="onToggleMute()"
+      [attr.aria-label]="isMuted() || volume() === 0 ? 'Unmute' : 'Mute'"
+    >
+      <span class="material-icons volume-icon" aria-hidden="true">{{ volumeIcon() }}</span>
     </button>
     <input
       type="range"
@@ -43,6 +53,8 @@
       [value]="isMuted() ? 0 : volume() * 100"
       class="volume-slider"
       (input)="onVolumeChange($event)"
+      aria-label="Volume"
+      [attr.aria-valuenow]="isMuted() ? 0 : volume() * 100"
     />
   </div>
 </div>

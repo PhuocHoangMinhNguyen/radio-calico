@@ -1,6 +1,7 @@
-import { Injectable, signal, computed } from '@angular/core';
+import { Injectable, signal, computed, inject } from '@angular/core';
 import Hls from 'hls.js';
 import { TrackInfo, StreamMetadata } from '../models/track-info';
+import { AnnouncerService } from './announcer.service';
 
 export type PlayerStatus = 'initializing' | 'ready' | 'playing' | 'paused' | 'buffering' | 'error';
 
@@ -12,6 +13,8 @@ const METADATA_POLL_INTERVAL = 10_000;
   providedIn: 'root'
 })
 export class HlsPlayerService {
+  private readonly announcerService = inject(AnnouncerService);
+
   private hls: Hls | null = null;
   private audioElement: HTMLAudioElement | null = null;
   private metadataIntervalId: ReturnType<typeof setInterval> | null = null;
@@ -256,6 +259,11 @@ export class HlsPlayerService {
         const newCoverUrl = `${COVER_URL}?t=${Date.now()}`;
         this._coverUrl.set(newCoverUrl);
         this.updateMediaSessionMetadata(newTrack, newCoverUrl);
+
+        // Announce track change to screen readers (only if we had a previous track)
+        if (current) {
+          this.announcerService.announceTrackChange(newTrack.title, newTrack.artist);
+        }
       }
 
       this._currentTrack.set(newTrack);

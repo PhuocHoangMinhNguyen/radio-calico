@@ -25,6 +25,12 @@
   &:hover {
     background: var(--background-highlight);
   }
+
+  &:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
+    background: var(--background-highlight);
+  }
 }
 
 img.track-card-art {

@@ -50,6 +50,11 @@
     background: var(--background-highlight);
   }
 
+  &:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: -2px;
+  }
+
   .material-icons {
     font-size: 24px;
   }

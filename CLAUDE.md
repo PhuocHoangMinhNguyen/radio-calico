@@ -76,14 +76,15 @@ Features planned to make Radio Calico more modern and production-ready, organize
   - CDN preconnect for faster streaming
   - Location: `src/manifest.webmanifest`, `ngsw-config.json`, `src/app/app.config.ts`
 
-- [ ] **4. Accessibility (WCAG 2.2 Compliance)**
-  - ARIA labels on all interactive controls
-  - Visible focus indicators (focus ring)
-  - Screen reader announcements for track changes (live regions)
-  - `prefers-reduced-motion` support
-  - Color contrast compliance (4.5:1 minimum)
+- [x] **4. Accessibility (WCAG 2.2 Compliance)** (COMPLETED)
+  - ARIA labels on all interactive controls (play/pause, mute, volume slider, rating buttons)
+  - Visible focus indicators (`:focus-visible` with 3px primary color outline)
+  - Screen reader announcements for track changes via live regions
+  - `prefers-reduced-motion` support (disables all transitions/animations)
+  - Color contrast compliance (4.5:1 minimum, `--text-subdued` updated to #787878)
+  - Skip link for keyboard users
   - No auto-play without user interaction
-  - Location: Component templates, `styles.scss`
+  - Location: `styles.scss`, `AnnouncerService`, component templates
 
 ### Medium Priority - User Engagement
 

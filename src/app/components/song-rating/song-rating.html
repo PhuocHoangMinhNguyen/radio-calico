@@ -1,19 +1,25 @@
 @if (hasTrackInfo()) {
-  <div class="song-rating">
+  <div class="song-rating" role="group" aria-label="Rate this track">
     <button
       class="rate-btn thumbs-up"
+      type="button"
       [class.active]="userRating() === 'up'"
       (click)="onRate('up')"
+      aria-label="Like this track"
+      [attr.aria-pressed]="userRating() === 'up'"
     >
-      <span class="material-icons">thumb_up</span>
+      <span class="material-icons" aria-hidden="true">thumb_up</span>
       <span class="count">{{ ratings().thumbs_up }}</span>
     </button>
     <button
       class="rate-btn thumbs-down"
+      type="button"
       [class.active]="userRating() === 'down'"
       (click)="onRate('down')"
+      aria-label="Dislike this track"
+      [attr.aria-pressed]="userRating() === 'down'"
     >
-      <span class="material-icons">thumb_down</span>
+      <span class="material-icons" aria-hidden="true">thumb_down</span>
       <span class="count">{{ ratings().thumbs_down }}</span>
     </button>
   </div>

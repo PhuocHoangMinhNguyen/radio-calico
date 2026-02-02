@@ -58,4 +58,9 @@
       background: rgba(229, 62, 62, 0.15);
     }
   }
+
+  &:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
+  }
 }
