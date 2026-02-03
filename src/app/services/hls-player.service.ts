@@ -2,6 +2,7 @@ import { Injectable, signal, computed, inject } from '@angular/core';
 import Hls from 'hls.js';
 import { TrackInfo, StreamMetadata } from '../models/track-info';
 import { AnnouncerService } from './announcer.service';
+import { PreferencesService } from './preferences.service';
 
 export type PlayerStatus = 'initializing' | 'ready' | 'playing' | 'paused' | 'buffering' | 'error';
 
@@ -14,6 +15,7 @@ const METADATA_POLL_INTERVAL = 10_000;
 })
 export class HlsPlayerService {
   private readonly announcerService = inject(AnnouncerService);
+  private readonly preferencesService = inject(PreferencesService);
 
   private hls: Hls | null = null;
   private audioElement: HTMLAudioElement | null = null;
@@ -21,7 +23,7 @@ export class HlsPlayerService {
 
   // Writable signals for internal state management
   private _isPlaying = signal<boolean>(false);
-  private _volume = signal<number>(0.8);
+  private _volume = signal<number>(this.preferencesService.volume());
   private _status = signal<PlayerStatus>('initializing');
   private _statusMessage = signal<string>('Initializing...');
   private _errorMessage = signal<string>('');
@@ -326,6 +328,7 @@ export class HlsPlayerService {
   setVolume(volume: number): void {
     const normalizedVolume = Math.max(0, Math.min(100, volume)) / 100;
     this._volume.set(normalizedVolume);
+    this.preferencesService.setVolume(normalizedVolume);
     if (this.audioElement) {
       this.audioElement.volume = normalizedVolume;
     }

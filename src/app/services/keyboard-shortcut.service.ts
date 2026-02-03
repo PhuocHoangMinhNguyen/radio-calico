@@ -1,6 +1,7 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { HlsPlayerService } from './hls-player.service';
 import { RatingService } from './rating.service';
+import { PreferencesService } from './preferences.service';
 
 export interface ShortcutAction {
   key: string;
@@ -14,10 +15,11 @@ export interface ShortcutAction {
 export class KeyboardShortcutService {
   private readonly playerService = inject(HlsPlayerService);
   private readonly ratingService = inject(RatingService);
+  private readonly preferencesService = inject(PreferencesService);
 
-  // Store previous volume for mute/unmute toggle
-  private _previousVolume = signal<number>(0.8);
-  private _isMuted = signal<boolean>(false);
+  // Store previous volume for mute/unmute toggle (loaded from preferences)
+  private _previousVolume = signal<number>(this.preferencesService.volume() || 0.8);
+  private _isMuted = signal<boolean>(this.preferencesService.isMuted());
 
   readonly isMuted = this._isMuted.asReadonly();
 
@@ -83,6 +85,7 @@ export class KeyboardShortcutService {
     // If unmuting via volume up, clear muted state
     if (this._isMuted() && newVolume > 0) {
       this._isMuted.set(false);
+      this.preferencesService.setMuted(false);
     }
   }
 
@@ -98,6 +101,7 @@ export class KeyboardShortcutService {
     // If volume reaches 0, consider it muted
     if (newVolume === 0) {
       this._isMuted.set(true);
+      this.preferencesService.setMuted(true);
     }
   }
 
@@ -112,11 +116,13 @@ export class KeyboardShortcutService {
       const restoreVolume = this._previousVolume() || 0.8;
       this.playerService.setVolume(restoreVolume * 100);
       this._isMuted.set(false);
+      this.preferencesService.setMuted(false);
     } else {
       // Mute: save current volume and set to 0
       this._previousVolume.set(currentVolume);
       this.playerService.setVolume(0);
       this._isMuted.set(true);
+      this.preferencesService.setMuted(true);
     }
   }
 

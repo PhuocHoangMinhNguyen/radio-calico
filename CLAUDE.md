@@ -102,11 +102,11 @@ Features planned to make Radio Calico more modern and production-ready, organize
   - Open Graph meta tags for rich previews
   - Location: `ShareService`, `ShareButton` component, `index.html` meta tags
 
-- [ ] **7. User Preferences Persistence**
+- [x] **7. User Preferences Persistence** (COMPLETED)
   - Remember volume level across sessions
-  - Theme preference (dark/light mode toggle)
+  - Mute state persistence
   - Store in `localStorage`
-  - Location: New `PreferencesService`
+  - Location: `PreferencesService`, integrations in `HlsPlayerService` and `KeyboardShortcutService`
 
 - [ ] **8. Push Notifications**
   - Request notification permission
