@@ -88,17 +88,19 @@ Features planned to make Radio Calico more modern and production-ready, organize
 
 ### Medium Priority - User Engagement
 
-- [ ] **5. Audio Visualization**
+- [ ] **5. Audio Visualization** (BLOCKED - CORS)
   - Spectrum analyzer/equalizer bars reacting to music
   - Use Web Audio API `AnalyserNode`
   - Canvas-based rendering for performance
+  - Note: Requires CORS headers on CloudFront HLS stream for Web Audio API to access frequency data
   - Location: New `AudioVisualizerComponent`
 
-- [ ] **6. Social Sharing**
+- [x] **6. Social Sharing** (COMPLETED)
   - Share current track to Twitter/X, Facebook
   - Copy shareable link to clipboard
+  - Native Web Share API on mobile devices
   - Open Graph meta tags for rich previews
-  - Location: New `ShareService`, meta tag updates in `index.html`
+  - Location: `ShareService`, `ShareButton` component, `index.html` meta tags
 
 - [ ] **7. User Preferences Persistence**
   - Remember volume level across sessions
