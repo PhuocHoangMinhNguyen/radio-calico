@@ -20,6 +20,16 @@
       <div class="track-actions">
         <app-song-rating />
         <app-share-button />
+        <button
+          class="theme-btn mobile-only"
+          type="button"
+          (click)="toggleTheme()"
+          [attr.aria-label]="theme() === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'"
+        >
+          <span class="material-icons" aria-hidden="true">
+            {{ theme() === 'dark' ? 'light_mode' : 'dark_mode' }}
+          </span>
+        </button>
       </div>
 
       <app-listening-stats class="mobile-stats" />

@@ -5,6 +5,7 @@ import { RecentlyPlayed } from './components/recently-played/recently-played';
 import { PlayerBar } from './components/player-bar/player-bar';
 import { KeyboardShortcutService } from './services/keyboard-shortcut.service';
 import { AnnouncerService } from './services/announcer.service';
+import { ThemeService } from './services/theme.service';
 
 @Component({
   selector: 'app-root',
@@ -15,6 +16,7 @@ import { AnnouncerService } from './services/announcer.service';
 export class App {
   private readonly keyboardService = inject(KeyboardShortcutService);
   private readonly announcerService = inject(AnnouncerService);
+  private readonly themeService = inject(ThemeService); // Initialize theme on app start
 
   /** Expose announcement signal for live region in template */
   readonly announcement = this.announcerService.announcement;

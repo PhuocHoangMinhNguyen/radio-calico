@@ -133,11 +133,12 @@ Features planned to make Radio Calico more modern and production-ready, organize
   - Automatic tracking starts/stops with playback
   - Location: `StatsService`, `ListeningStats` component in sidebar
 
-- [ ] **11. Theme Customization**
-  - Dark/light mode toggle
-  - Optional: Extract dominant color from album art for adaptive theming
-  - CSS custom properties switching
-  - Location: `ThemeService`, `styles.scss`
+- [x] **11. Theme Customization** (COMPLETED)
+  - Dark/light mode toggle with persisted preference
+  - CSS custom properties switching via `data-theme` attribute
+  - Light theme with proper contrast ratios
+  - Theme toggle in sidebar (desktop) and now-playing-hero (mobile)
+  - Location: `ThemeService`, `ThemeToggle` component, `styles.scss`
 
 - [ ] **12. Stream Quality Indicator**
   - Show buffer health status

@@ -74,6 +74,42 @@
   flex-wrap: wrap;
 }
 
+/* Theme button for mobile */
+.theme-btn {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-full);
+  padding: var(--spacing-sm);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+
+  .material-icons {
+    font-size: 20px;
+    color: var(--text-secondary);
+  }
+
+  &:hover {
+    background: var(--background-highlight);
+
+    .material-icons {
+      color: var(--primary-color);
+    }
+  }
+
+  &:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
+  }
+}
+
+/* Mobile only - hidden on desktop where sidebar shows theme toggle */
+.mobile-only {
+  display: none;
+}
+
 /* Mobile stats - hidden on desktop where sidebar shows it */
 .mobile-stats {
   display: none;
@@ -84,6 +120,10 @@
   .mobile-stats {
     display: block;
     margin-top: var(--spacing-md);
+  }
+
+  .mobile-only {
+    display: flex;
   }
 
   .hero-content {
