@@ -1,0 +1,19 @@
+.listening-stats {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--background-highlight);
+  border-radius: var(--radius-md);
+}
+
+.stats-icon {
+  font-size: 20px;
+  color: var(--primary-color);
+}
+
+.stats-text {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}

@@ -74,8 +74,18 @@
   flex-wrap: wrap;
 }
 
+/* Mobile stats - hidden on desktop where sidebar shows it */
+.mobile-stats {
+  display: none;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
+  .mobile-stats {
+    display: block;
+    margin-top: var(--spacing-md);
+  }
+
   .hero-content {
     flex-direction: column;
     align-items: center;

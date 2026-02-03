@@ -126,11 +126,12 @@ Features planned to make Radio Calico more modern and production-ready, organize
   - Available on both desktop and mobile
   - Location: `SleepTimerService`, `SleepTimerButton` component, integrated in `PlayerBar`
 
-- [ ] **10. Listening Statistics**
-  - Track total listening time
-  - Display "You've listened for X hours"
-  - Store in `localStorage` or backend
-  - Location: New `StatsService`
+- [x] **10. Listening Statistics** (COMPLETED)
+  - Track total listening time while playing
+  - Display "You've listened for X hours/minutes"
+  - Persisted to `localStorage` (saves every 10 seconds)
+  - Automatic tracking starts/stops with playback
+  - Location: `StatsService`, `ListeningStats` component in sidebar
 
 - [ ] **11. Theme Customization**
   - Dark/light mode toggle

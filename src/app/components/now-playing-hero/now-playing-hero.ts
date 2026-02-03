@@ -2,10 +2,11 @@ import { Component, inject } from '@angular/core';
 import { HlsPlayerService } from '../../services/hls-player.service';
 import { SongRating } from '../song-rating/song-rating';
 import { ShareButton } from '../share-button/share-button';
+import { ListeningStats } from '../listening-stats/listening-stats';
 
 @Component({
   selector: 'app-now-playing-hero',
-  imports: [SongRating, ShareButton],
+  imports: [SongRating, ShareButton, ListeningStats],
   templateUrl: './now-playing-hero.html',
   styleUrl: './now-playing-hero.scss',
 })
