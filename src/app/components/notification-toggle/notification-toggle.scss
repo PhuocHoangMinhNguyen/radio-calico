@@ -1,0 +1,66 @@
+.notification-toggle {
+  padding: var(--spacing-sm) 0;
+}
+
+.enable-btn,
+.toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  width: 100%;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  .material-icons {
+    font-size: 20px;
+  }
+
+  &:hover {
+    color: var(--text-primary);
+    border-color: var(--text-secondary);
+  }
+
+  &:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
+  }
+}
+
+.enable-btn {
+  background: var(--background-highlight);
+
+  &:hover {
+    background: var(--background-press);
+  }
+}
+
+.toggle-btn {
+  &.active {
+    color: var(--primary-color);
+    border-color: var(--primary-color);
+    background: rgba(29, 185, 84, 0.1);
+
+    &:hover {
+      background: rgba(29, 185, 84, 0.15);
+    }
+  }
+}
+
+.denied-notice {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  color: var(--text-subdued);
+  font-size: 0.75rem;
+
+  .material-icons {
+    font-size: 18px;
+  }
+}

@@ -180,10 +180,48 @@
   }
 }
 
+/* Mobile Actions - hidden on desktop where sidebar is visible */
+.mobile-actions {
+  display: none;
+}
+
+.notification-btn {
+  background: transparent;
+  border: none;
+  padding: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  transition: background 0.2s;
+
+  .material-icons {
+    font-size: 24px;
+    color: var(--text-secondary);
+  }
+
+  &:hover {
+    background: var(--background-highlight);
+  }
+
+  &:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
+    background: var(--background-highlight);
+  }
+
+  &.active {
+    .material-icons {
+      color: var(--primary-color);
+    }
+  }
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .player-bar-container {
-    grid-template-columns: 1fr auto;
+    grid-template-columns: 1fr auto auto;
     padding: 0 var(--spacing-sm);
   }
 
@@ -194,6 +232,11 @@
 
   .playback-controls {
     justify-content: flex-end;
+  }
+
+  .mobile-actions {
+    display: flex;
+    align-items: center;
   }
 
   .volume-section {

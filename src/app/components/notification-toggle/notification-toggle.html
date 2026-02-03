@@ -1,0 +1,30 @@
+@if (isSupported) {
+  <div class="notification-toggle">
+    @if (permission() === 'default') {
+      <button
+        class="enable-btn"
+        (click)="onRequestPermission()"
+        aria-label="Enable track change notifications"
+      >
+        <span class="material-icons">notifications</span>
+        <span class="btn-text">Enable Notifications</span>
+      </button>
+    } @else if (permission() === 'granted') {
+      <button
+        class="toggle-btn"
+        [class.active]="isEnabled()"
+        (click)="onToggle()"
+        [attr.aria-pressed]="isEnabled()"
+        aria-label="Toggle track change notifications"
+      >
+        <span class="material-icons">{{ isEnabled() ? 'notifications_active' : 'notifications_off' }}</span>
+        <span class="btn-text">{{ isEnabled() ? 'Notifications On' : 'Notifications Off' }}</span>
+      </button>
+    } @else if (permission() === 'denied') {
+      <div class="denied-notice">
+        <span class="material-icons">notifications_off</span>
+        <span class="notice-text">Notifications blocked</span>
+      </div>
+    }
+  </div>
+}

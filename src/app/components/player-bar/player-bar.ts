@@ -9,6 +9,7 @@ import {
 } from '@angular/core';
 import { HlsPlayerService } from '../../services/hls-player.service';
 import { KeyboardShortcutService } from '../../services/keyboard-shortcut.service';
+import { NotificationService } from '../../services/notification.service';
 
 @Component({
   selector: 'app-player-bar',
@@ -19,6 +20,7 @@ import { KeyboardShortcutService } from '../../services/keyboard-shortcut.servic
 export class PlayerBar implements AfterViewInit, OnDestroy {
   private hlsService = inject(HlsPlayerService);
   private keyboardService = inject(KeyboardShortcutService);
+  private notificationService = inject(NotificationService);
 
   @ViewChild('audioPlayer') audioPlayerRef!: ElementRef<HTMLAudioElement>;
 
@@ -32,6 +34,11 @@ export class PlayerBar implements AfterViewInit, OnDestroy {
   coverUrl = this.hlsService.coverUrl;
   statusMessage = this.hlsService.statusMessage;
   isMuted = this.keyboardService.isMuted;
+
+  // Notification signals for mobile toggle
+  notificationPermission = this.notificationService.permission;
+  notificationsEnabled = this.notificationService.isEnabled;
+  notificationsSupported = this.notificationService.isSupported;
 
   // Computed signal for volume icon
   volumeIcon = computed(() => {
@@ -64,5 +71,13 @@ export class PlayerBar implements AfterViewInit, OnDestroy {
   onToggleMute(): void {
     // Simulate pressing 'M' key to toggle mute
     this.keyboardService.handleKeyboardEvent(new KeyboardEvent('keydown', { key: 'm' }));
+  }
+
+  onNotificationToggle(): void {
+    if (this.notificationPermission() === 'default') {
+      this.notificationService.requestPermission();
+    } else if (this.notificationPermission() === 'granted') {
+      this.notificationService.toggleEnabled();
+    }
   }
 }

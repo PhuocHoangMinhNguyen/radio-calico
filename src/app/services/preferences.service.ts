@@ -4,6 +4,7 @@ export interface UserPreferences {
   volume: number; // 0-1 range
   isMuted: boolean;
   theme: 'dark' | 'light';
+  notificationsEnabled: boolean;
 }
 
 const STORAGE_KEY = 'radio-calico-preferences';
@@ -12,6 +13,7 @@ const DEFAULT_PREFERENCES: UserPreferences = {
   volume: 0.8,
   isMuted: false,
   theme: 'dark',
+  notificationsEnabled: false,
 };
 
 @Injectable({
@@ -22,11 +24,13 @@ export class PreferencesService {
   private _volume = signal<number>(DEFAULT_PREFERENCES.volume);
   private _isMuted = signal<boolean>(DEFAULT_PREFERENCES.isMuted);
   private _theme = signal<'dark' | 'light'>(DEFAULT_PREFERENCES.theme);
+  private _notificationsEnabled = signal<boolean>(DEFAULT_PREFERENCES.notificationsEnabled);
 
   // Public readonly signals
   readonly volume = this._volume.asReadonly();
   readonly isMuted = this._isMuted.asReadonly();
   readonly theme = this._theme.asReadonly();
+  readonly notificationsEnabled = this._notificationsEnabled.asReadonly();
 
   constructor() {
     this.loadPreferences();
@@ -37,6 +41,7 @@ export class PreferencesService {
         volume: this._volume(),
         isMuted: this._isMuted(),
         theme: this._theme(),
+        notificationsEnabled: this._notificationsEnabled(),
       };
       this.saveToStorage(prefs);
     });
@@ -59,6 +64,9 @@ export class PreferencesService {
         }
         if (prefs.theme === 'dark' || prefs.theme === 'light') {
           this._theme.set(prefs.theme);
+        }
+        if (typeof prefs.notificationsEnabled === 'boolean') {
+          this._notificationsEnabled.set(prefs.notificationsEnabled);
         }
       }
     } catch (e) {
@@ -100,11 +108,19 @@ export class PreferencesService {
   }
 
   /**
+   * Update notifications enabled preference
+   */
+  setNotificationsEnabled(enabled: boolean): void {
+    this._notificationsEnabled.set(enabled);
+  }
+
+  /**
    * Reset all preferences to defaults
    */
   resetToDefaults(): void {
     this._volume.set(DEFAULT_PREFERENCES.volume);
     this._isMuted.set(DEFAULT_PREFERENCES.isMuted);
     this._theme.set(DEFAULT_PREFERENCES.theme);
+    this._notificationsEnabled.set(DEFAULT_PREFERENCES.notificationsEnabled);
   }
 }

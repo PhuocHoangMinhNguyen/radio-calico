@@ -108,11 +108,13 @@ Features planned to make Radio Calico more modern and production-ready, organize
   - Store in `localStorage`
   - Location: `PreferencesService`, integrations in `HlsPlayerService` and `KeyboardShortcutService`
 
-- [ ] **8. Push Notifications**
-  - Request notification permission
-  - Notify on track change (when app is backgrounded)
-  - Notification click returns to app
-  - Location: Extend Service Worker, new `NotificationService`
+- [x] **8. Track Change Notifications** (COMPLETED)
+  - Browser Notification API for track changes when app is backgrounded
+  - Request permission UI in sidebar
+  - Toggle to enable/disable notifications
+  - Notification click returns focus to app
+  - Preference persisted in localStorage
+  - Location: `NotificationService`, `NotificationToggle` component, `Sidebar`
 
 ### Lower Priority - Polish & Extras
 

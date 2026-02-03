@@ -36,6 +36,28 @@
     </button>
   </div>
 
+  <!-- Mobile: Notification Toggle (hidden on desktop where sidebar is visible) -->
+  @if (notificationsSupported && notificationPermission() !== 'denied') {
+    <div class="mobile-actions">
+      <button
+        class="notification-btn"
+        type="button"
+        [class.active]="notificationsEnabled()"
+        (click)="onNotificationToggle()"
+        [attr.aria-label]="notificationPermission() === 'default' ? 'Enable notifications' : (notificationsEnabled() ? 'Disable notifications' : 'Enable notifications')"
+        [attr.aria-pressed]="notificationPermission() === 'granted' ? notificationsEnabled() : undefined"
+      >
+        @if (notificationPermission() === 'default') {
+          <span class="material-icons" aria-hidden="true">notifications</span>
+        } @else if (notificationsEnabled()) {
+          <span class="material-icons" aria-hidden="true">notifications_active</span>
+        } @else {
+          <span class="material-icons" aria-hidden="true">notifications_off</span>
+        }
+      </button>
+    </div>
+  }
+
   <!-- Right: Volume -->
   <div class="volume-section" [class.muted]="isMuted() || volume() === 0">
     <button

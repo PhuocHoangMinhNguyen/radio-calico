@@ -3,6 +3,7 @@ import Hls from 'hls.js';
 import { TrackInfo, StreamMetadata } from '../models/track-info';
 import { AnnouncerService } from './announcer.service';
 import { PreferencesService } from './preferences.service';
+import { NotificationService } from './notification.service';
 
 export type PlayerStatus = 'initializing' | 'ready' | 'playing' | 'paused' | 'buffering' | 'error';
 
@@ -16,6 +17,7 @@ const METADATA_POLL_INTERVAL = 10_000;
 export class HlsPlayerService {
   private readonly announcerService = inject(AnnouncerService);
   private readonly preferencesService = inject(PreferencesService);
+  private readonly notificationService = inject(NotificationService);
 
   private hls: Hls | null = null;
   private audioElement: HTMLAudioElement | null = null;
@@ -265,6 +267,9 @@ export class HlsPlayerService {
         // Announce track change to screen readers (only if we had a previous track)
         if (current) {
           this.announcerService.announceTrackChange(newTrack.title, newTrack.artist);
+
+          // Send browser notification if enabled and page is backgrounded
+          this.notificationService.notifyTrackChange(newTrack.title, newTrack.artist, newCoverUrl);
         }
       }
 
