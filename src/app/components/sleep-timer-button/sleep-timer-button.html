@@ -1,0 +1,53 @@
+<div class="sleep-timer-container">
+  <button
+    class="sleep-timer-btn"
+    type="button"
+    [class.active]="isActive()"
+    (click)="toggleMenu()"
+    [attr.aria-label]="isActive() ? 'Sleep timer: ' + formattedTime() + ' remaining' : 'Set sleep timer'"
+    [attr.aria-expanded]="isMenuOpen()"
+    aria-haspopup="menu"
+  >
+    <span class="material-icons" aria-hidden="true">bedtime</span>
+    @if (isActive()) {
+      <span class="timer-display">{{ formattedTime() }}</span>
+    }
+  </button>
+
+  @if (isMenuOpen()) {
+    <div
+      class="sleep-timer-menu"
+      role="menu"
+      (keydown)="onMenuKeydown($event)"
+    >
+      <div class="menu-header">Sleep Timer</div>
+
+      @for (option of options; track option.minutes) {
+        <button
+          class="menu-item"
+          type="button"
+          role="menuitem"
+          [class.selected]="selectedDuration() === option.minutes"
+          (click)="selectDuration(option.minutes)"
+        >
+          {{ option.label }}
+          @if (selectedDuration() === option.minutes && isActive()) {
+            <span class="material-icons check-icon" aria-hidden="true">check</span>
+          }
+        </button>
+      }
+
+      @if (isActive()) {
+        <div class="menu-divider"></div>
+        <button
+          class="menu-item cancel-item"
+          type="button"
+          role="menuitem"
+          (click)="cancelTimer()"
+        >
+          Cancel timer
+        </button>
+      }
+    </div>
+  }
+</div>

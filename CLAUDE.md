@@ -118,10 +118,13 @@ Features planned to make Radio Calico more modern and production-ready, organize
 
 ### Lower Priority - Polish & Extras
 
-- [ ] **9. Sleep Timer**
+- [x] **9. Sleep Timer** (COMPLETED)
   - Auto-stop after 15/30/60/90 minutes
-  - Visual countdown indicator
-  - Location: New `SleepTimerService`, UI in player bar
+  - Visual countdown indicator in player bar
+  - Dropdown menu to select duration
+  - Cancel option when timer is active
+  - Available on both desktop and mobile
+  - Location: `SleepTimerService`, `SleepTimerButton` component, integrated in `PlayerBar`
 
 - [ ] **10. Listening Statistics**
   - Track total listening time

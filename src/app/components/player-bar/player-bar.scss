@@ -180,6 +180,11 @@
   }
 }
 
+/* Desktop only utility */
+.desktop-only {
+  display: block;
+}
+
 /* Mobile Actions - hidden on desktop where sidebar is visible */
 .mobile-actions {
   display: none;
@@ -237,6 +242,11 @@
   .mobile-actions {
     display: flex;
     align-items: center;
+    gap: var(--spacing-xs);
+  }
+
+  .desktop-only {
+    display: none;
   }
 
   .volume-section {

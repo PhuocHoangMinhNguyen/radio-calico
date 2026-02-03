@@ -36,9 +36,10 @@
     </button>
   </div>
 
-  <!-- Mobile: Notification Toggle (hidden on desktop where sidebar is visible) -->
-  @if (notificationsSupported && notificationPermission() !== 'denied') {
-    <div class="mobile-actions">
+  <!-- Mobile Actions (hidden on desktop where sidebar is visible) -->
+  <div class="mobile-actions">
+    <app-sleep-timer-button />
+    @if (notificationsSupported && notificationPermission() !== 'denied') {
       <button
         class="notification-btn"
         type="button"
@@ -55,11 +56,12 @@
           <span class="material-icons" aria-hidden="true">notifications_off</span>
         }
       </button>
-    </div>
-  }
+    }
+  </div>
 
-  <!-- Right: Volume -->
+  <!-- Right: Volume & Extra Controls -->
   <div class="volume-section" [class.muted]="isMuted() || volume() === 0">
+    <app-sleep-timer-button class="desktop-only" />
     <button
       class="volume-btn"
       type="button"
