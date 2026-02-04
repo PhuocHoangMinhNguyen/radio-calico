@@ -5,7 +5,13 @@
       @for (track of recentlyPlayed(); track $index) {
         <div class="track-card">
           @if (track.coverUrl) {
-            <img [src]="track.coverUrl" alt="Album art" class="track-card-art" />
+            <img
+              [src]="track.coverUrl"
+              alt="Album art"
+              class="track-card-art"
+              loading="lazy"
+              decoding="async"
+            />
           } @else {
             <div class="track-card-art placeholder">
               <span class="material-icons">music_note</span>

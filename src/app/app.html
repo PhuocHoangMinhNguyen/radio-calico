@@ -2,12 +2,20 @@
 <a class="skip-link" href="#main-content">Skip to main content</a>
 
 <div class="app-container">
-  <app-sidebar class="sidebar" role="complementary" aria-label="Application sidebar" />
+  @defer (on idle) {
+    <app-sidebar class="sidebar" role="complementary" aria-label="Application sidebar" />
+  } @placeholder {
+    <aside class="sidebar" role="complementary" aria-label="Application sidebar"></aside>
+  }
 
   <main class="main-content" id="main-content" role="main" tabindex="-1">
     <div class="main-scroll-container">
       <app-now-playing-hero />
-      <app-recently-played />
+      @defer (on viewport) {
+        <app-recently-played />
+      } @placeholder {
+        <section class="recently-played-placeholder"></section>
+      }
     </div>
   </main>
 

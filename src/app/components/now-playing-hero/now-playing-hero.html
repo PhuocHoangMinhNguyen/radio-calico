@@ -1,7 +1,14 @@
 <section class="now-playing-hero">
   <div class="hero-content">
     @if (coverUrl()) {
-      <img [src]="coverUrl()" alt="Album art" class="hero-cover" />
+      <img
+        [src]="coverUrl()"
+        alt="Album art"
+        class="hero-cover"
+        loading="eager"
+        fetchpriority="high"
+        decoding="async"
+      />
     } @else {
       <div class="hero-cover placeholder">
         <span class="material-icons">music_note</span>

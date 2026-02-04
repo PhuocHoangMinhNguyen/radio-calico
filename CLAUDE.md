@@ -159,11 +159,14 @@ Features planned to make Radio Calico more modern and production-ready, organize
   - Database table: `error_logs` with indexes on created_at, session_id, severity
   - Location: `ErrorMonitoringService`, `GlobalErrorHandler` in `app.config.ts`, `server.js`, `db/init.sql`
 
-- [ ] **14. Performance Optimizations**
-  - Lazy load non-critical components
-  - Image optimization (WebP with fallback)
-  - Preconnect to CDN endpoints
-  - Location: `angular.json`, component lazy loading
+- [x] **14. Performance Optimizations** (COMPLETED)
+  - `@defer (on idle)` for sidebar (desktop-only, loads after initial render)
+  - `@defer (on viewport)` for recently-played section (loads when scrolled into view)
+  - Native `loading="lazy"` and `decoding="async"` for below-fold images
+  - `fetchpriority="high"` for hero album art (LCP optimization)
+  - CDN preconnect already in place (`index.html`)
+  - Separate lazy chunks: sidebar (9 kB), recently-played (3 kB)
+  - Location: `app.html` (@defer blocks), component templates
 
 - [ ] **15. SEO & Open Graph**
   - Dynamic meta tags for current track
