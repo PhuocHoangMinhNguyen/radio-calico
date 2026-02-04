@@ -1,0 +1,15 @@
+@if (isPlaying()) {
+  <div
+    class="stream-quality"
+    [class.quality-good]="connectionQuality() === 'good'"
+    [class.quality-fair]="connectionQuality() === 'fair'"
+    [class.quality-poor]="connectionQuality() === 'poor'"
+    [attr.aria-label]="'Connection quality: ' + qualityLabel() + ', Buffer: ' + formattedBuffer() + ', Bitrate: ' + formattedBitrate()"
+  >
+    <span class="material-icons quality-icon" aria-hidden="true">{{ qualityIcon() }}</span>
+    <div class="quality-details">
+      <span class="quality-label">{{ qualityLabel() }}</span>
+      <span class="quality-stats">{{ formattedBuffer() }} buffer</span>
+    </div>
+  </div>
+}

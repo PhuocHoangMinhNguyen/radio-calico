@@ -11,10 +11,11 @@ import { HlsPlayerService } from '../../services/hls-player.service';
 import { KeyboardShortcutService } from '../../services/keyboard-shortcut.service';
 import { NotificationService } from '../../services/notification.service';
 import { SleepTimerButton } from '../sleep-timer-button/sleep-timer-button';
+import { StreamQualityComponent } from '../stream-quality/stream-quality';
 
 @Component({
   selector: 'app-player-bar',
-  imports: [SleepTimerButton],
+  imports: [SleepTimerButton, StreamQualityComponent],
   templateUrl: './player-bar.html',
   styleUrl: './player-bar.scss',
 })

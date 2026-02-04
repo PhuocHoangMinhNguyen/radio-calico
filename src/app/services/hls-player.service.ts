@@ -6,6 +6,7 @@ import { PreferencesService } from './preferences.service';
 import { NotificationService } from './notification.service';
 
 export type PlayerStatus = 'initializing' | 'ready' | 'playing' | 'paused' | 'buffering' | 'error';
+export type ConnectionQuality = 'good' | 'fair' | 'poor';
 
 const METADATA_URL = 'https://d3d4yli4hf5bmh.cloudfront.net/metadatav2.json';
 const COVER_URL = 'https://d3d4yli4hf5bmh.cloudfront.net/cover.jpg';
@@ -33,6 +34,12 @@ export class HlsPlayerService {
   private _recentlyPlayed = signal<TrackInfo[]>([]);
   private _coverUrl = signal<string | null>(null);
 
+  // Stream quality signals
+  private _bufferHealth = signal<number>(0); // Seconds of buffered content
+  private _bitrate = signal<number>(0); // Current bitrate in kbps
+  private _fragmentLatency = signal<number>(0); // Last fragment load time in ms
+  private bufferCheckIntervalId: ReturnType<typeof setInterval> | null = null;
+
   // Public readonly signals
   readonly isPlaying = this._isPlaying.asReadonly();
   readonly volume = this._volume.asReadonly();
@@ -43,12 +50,30 @@ export class HlsPlayerService {
   readonly recentlyPlayed = this._recentlyPlayed.asReadonly();
   readonly coverUrl = this._coverUrl.asReadonly();
 
+  // Stream quality readonly signals
+  readonly bufferHealth = this._bufferHealth.asReadonly();
+  readonly bitrate = this._bitrate.asReadonly();
+  readonly fragmentLatency = this._fragmentLatency.asReadonly();
+
   // Computed signals
   readonly statusClass = computed(() => {
     const status = this._status();
     return status === 'playing' ? 'playing' : status === 'error' ? 'error' : '';
   });
   readonly hasTrackInfo = computed(() => this._currentTrack() !== null);
+
+  // Computed connection quality based on buffer health and latency
+  readonly connectionQuality = computed<ConnectionQuality>(() => {
+    const buffer = this._bufferHealth();
+    const latency = this._fragmentLatency();
+
+    // Good: buffer > 10s and latency < 500ms
+    // Fair: buffer > 5s and latency < 1000ms
+    // Poor: anything else
+    if (buffer >= 10 && latency < 500) return 'good';
+    if (buffer >= 5 && latency < 1000) return 'fair';
+    return 'poor';
+  });
 
   /**
    * Initialize the HLS player with an audio element and stream URL
@@ -75,6 +100,9 @@ export class HlsPlayerService {
 
     // Start polling for track metadata
     this.startMetadataPolling();
+
+    // Start monitoring buffer health
+    this.startBufferMonitoring();
   }
 
   /**
@@ -91,10 +119,30 @@ export class HlsPlayerService {
     this.hls.attachMedia(this.audioElement!);
 
     // HLS event listeners
-    this.hls.on(Hls.Events.MANIFEST_PARSED, () => {
+    this.hls.on(Hls.Events.MANIFEST_PARSED, (_event, data) => {
       this._status.set('ready');
       this._statusMessage.set('Ready to play');
+      // Set initial bitrate from first level
+      if (data.levels && data.levels.length > 0) {
+        this._bitrate.set(Math.round(data.levels[0].bitrate / 1000));
+      }
       console.log('HLS manifest loaded successfully');
+    });
+
+    // Track fragment load times for latency measurement
+    this.hls.on(Hls.Events.FRAG_LOADED, (_event, data) => {
+      if (data.frag.stats) {
+        const loadTime = data.frag.stats.loading.end - data.frag.stats.loading.start;
+        this._fragmentLatency.set(Math.round(loadTime));
+      }
+    });
+
+    // Update bitrate when level changes
+    this.hls.on(Hls.Events.LEVEL_SWITCHED, (_event, data) => {
+      const level = this.hls?.levels[data.level];
+      if (level) {
+        this._bitrate.set(Math.round(level.bitrate / 1000));
+      }
     });
 
     this.hls.on(Hls.Events.ERROR, (_event, data) => {
@@ -241,6 +289,31 @@ export class HlsPlayerService {
   }
 
   /**
+   * Start monitoring buffer health from the audio element
+   */
+  private startBufferMonitoring(): void {
+    // Check buffer every second
+    this.bufferCheckIntervalId = setInterval(() => {
+      if (!this.audioElement) return;
+
+      const buffered = this.audioElement.buffered;
+      const currentTime = this.audioElement.currentTime;
+
+      if (buffered.length > 0) {
+        // Find the buffer range that contains the current playback position
+        for (let i = 0; i < buffered.length; i++) {
+          if (currentTime >= buffered.start(i) && currentTime <= buffered.end(i)) {
+            const bufferAhead = buffered.end(i) - currentTime;
+            this._bufferHealth.set(Math.round(bufferAhead * 10) / 10); // Round to 1 decimal
+            return;
+          }
+        }
+      }
+      this._bufferHealth.set(0);
+    }, 1000);
+  }
+
+  /**
    * Fetch track metadata from the JSON endpoint
    */
   private async fetchMetadata(): Promise<void> {
@@ -355,6 +428,10 @@ export class HlsPlayerService {
     if (this.metadataIntervalId !== null) {
       clearInterval(this.metadataIntervalId);
       this.metadataIntervalId = null;
+    }
+    if (this.bufferCheckIntervalId !== null) {
+      clearInterval(this.bufferCheckIntervalId);
+      this.bufferCheckIntervalId = null;
     }
     if (this.hls) {
       this.hls.destroy();

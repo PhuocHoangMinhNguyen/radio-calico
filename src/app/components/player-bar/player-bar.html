@@ -61,6 +61,7 @@
 
   <!-- Right: Volume & Extra Controls -->
   <div class="volume-section" [class.muted]="isMuted() || volume() === 0">
+    <app-stream-quality />
     <app-sleep-timer-button class="desktop-only" />
     <button
       class="volume-btn"

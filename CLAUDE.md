@@ -140,11 +140,12 @@ Features planned to make Radio Calico more modern and production-ready, organize
   - Theme toggle in sidebar (desktop) and now-playing-hero (mobile)
   - Location: `ThemeService`, `ThemeToggle` component, `styles.scss`
 
-- [ ] **12. Stream Quality Indicator**
+- [x] **12. Stream Quality Indicator** (COMPLETED)
   - Show buffer health status
   - Display current bitrate
   - Connection quality badge (good/fair/poor)
-  - Location: Extend `HlsPlayerService`, new `StreamQualityComponent`
+  - Desktop-only display (hidden on mobile for space)
+  - Location: `HlsPlayerService` (buffer, bitrate, latency signals), `StreamQualityComponent` in `PlayerBar`
 
 ### Technical/Production Readiness
 
