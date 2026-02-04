@@ -184,6 +184,45 @@ const server = http.createServer(async (req, res) => {
         }
     }
 
+    // API: POST /api/errors
+    if (req.method === 'POST' && parsedUrl.pathname === '/api/errors') {
+        try {
+            const body = JSON.parse(await readBody(req));
+            const { session_id, source, severity, message, details, metadata } = body;
+
+            if (!session_id || !source || !severity || !message) {
+                return sendJson(res, 400, { error: 'session_id, source, severity, and message are required' });
+            }
+
+            const validSources = ['hls', 'network', 'media', 'app', 'unknown'];
+            const validSeverities = ['info', 'warning', 'error', 'fatal'];
+
+            if (!validSources.includes(source)) {
+                return sendJson(res, 400, { error: `source must be one of: ${validSources.join(', ')}` });
+            }
+            if (!validSeverities.includes(severity)) {
+                return sendJson(res, 400, { error: `severity must be one of: ${validSeverities.join(', ')}` });
+            }
+
+            const userAgent = req.headers['user-agent'] || null;
+
+            const result = await pool.query(
+                `INSERT INTO error_logs (session_id, source, severity, message, details, metadata, user_agent)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7)
+                 RETURNING id, created_at`,
+                [session_id, source, severity, message, details || null, metadata ? JSON.stringify(metadata) : null, userAgent]
+            );
+
+            return sendJson(res, 201, {
+                id: result.rows[0].id,
+                created_at: result.rows[0].created_at
+            });
+        } catch (err) {
+            console.error('DB error (POST /api/errors):', err);
+            return sendJson(res, 500, { error: 'Database error' });
+        }
+    }
+
     // Static files / SPA fallback
     let filePath = path.join(DIST_DIR, parsedUrl.pathname === '/' ? 'index.html' : parsedUrl.pathname);
 

@@ -4,6 +4,7 @@ import { TrackInfo, StreamMetadata } from '../models/track-info';
 import { AnnouncerService } from './announcer.service';
 import { PreferencesService } from './preferences.service';
 import { NotificationService } from './notification.service';
+import { ErrorMonitoringService } from './error-monitoring.service';
 
 export type PlayerStatus = 'initializing' | 'ready' | 'playing' | 'paused' | 'buffering' | 'error';
 export type ConnectionQuality = 'good' | 'fair' | 'poor';
@@ -19,6 +20,7 @@ export class HlsPlayerService {
   private readonly announcerService = inject(AnnouncerService);
   private readonly preferencesService = inject(PreferencesService);
   private readonly notificationService = inject(NotificationService);
+  private readonly errorMonitoring = inject(ErrorMonitoringService);
 
   private hls: Hls | null = null;
   private audioElement: HTMLAudioElement | null = null;
@@ -146,25 +148,43 @@ export class HlsPlayerService {
     });
 
     this.hls.on(Hls.Events.ERROR, (_event, data) => {
+      const errorId = this.errorMonitoring.trackHlsError(
+        data.type,
+        data.fatal,
+        data.details || 'Unknown HLS error',
+        { url: data.url, response: data.response }
+      );
+
       if (data.fatal) {
         switch (data.type) {
           case Hls.ErrorTypes.NETWORK_ERROR:
             this._status.set('error');
             this._statusMessage.set('Network error - Retrying...');
-            console.error('Network error:', data);
+            this.errorMonitoring.recordRecoveryAttempt(errorId);
             this.hls!.startLoad();
+            // Track successful recovery after a short delay
+            setTimeout(() => {
+              if (this._status() !== 'error') {
+                this.errorMonitoring.recordSuccessfulRecovery(errorId);
+              }
+            }, 5000);
             break;
           case Hls.ErrorTypes.MEDIA_ERROR:
             this._status.set('error');
             this._statusMessage.set('Media error - Recovering...');
-            console.error('Media error:', data);
+            this.errorMonitoring.recordRecoveryAttempt(errorId);
             this.hls!.recoverMediaError();
+            // Track successful recovery after a short delay
+            setTimeout(() => {
+              if (this._status() !== 'error') {
+                this.errorMonitoring.recordSuccessfulRecovery(errorId);
+              }
+            }, 5000);
             break;
           default:
             this._status.set('error');
             this._statusMessage.set('Fatal error - Cannot play stream');
             this._errorMessage.set(data.details || 'Unknown error');
-            console.error('Fatal error:', data);
             this.hls!.destroy();
             break;
         }
@@ -276,7 +296,10 @@ export class HlsPlayerService {
       this._status.set('error');
       this._statusMessage.set('Error loading stream');
       this._errorMessage.set('Audio element error');
-      console.error('Audio error');
+      this.errorMonitoring.trackMediaError(
+        'Audio element error',
+        this.audioElement?.error
+      );
     });
   }
 
@@ -364,7 +387,10 @@ export class HlsPlayerService {
       }
       this._recentlyPlayed.set(recentTracks);
     } catch (e) {
-      console.warn('Failed to fetch track metadata:', e);
+      this.errorMonitoring.trackNetworkError(
+        'Failed to fetch track metadata',
+        METADATA_URL
+      );
     }
   }
 
@@ -374,7 +400,13 @@ export class HlsPlayerService {
   play(): void {
     if (this.audioElement) {
       this.audioElement.play().catch((error) => {
-        console.error('Play error:', error);
+        this.errorMonitoring.trackError(
+          'media',
+          'error',
+          'Could not play stream',
+          error.message,
+          { name: error.name }
+        );
         this.handleError('Could not play stream');
       });
     }

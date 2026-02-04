@@ -16,3 +16,19 @@ CREATE TABLE IF NOT EXISTS song_votes (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   UNIQUE(song_title, song_artist, ip_address)
 );
+
+CREATE TABLE IF NOT EXISTS error_logs (
+  id SERIAL PRIMARY KEY,
+  session_id TEXT NOT NULL,
+  source TEXT NOT NULL CHECK (source IN ('hls', 'network', 'media', 'app', 'unknown')),
+  severity TEXT NOT NULL CHECK (severity IN ('info', 'warning', 'error', 'fatal')),
+  message TEXT NOT NULL,
+  details TEXT,
+  metadata JSONB,
+  user_agent TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_error_logs_created_at ON error_logs(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_error_logs_session_id ON error_logs(session_id);
+CREATE INDEX IF NOT EXISTS idx_error_logs_severity ON error_logs(severity);

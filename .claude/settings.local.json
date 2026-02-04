@@ -14,7 +14,9 @@
       "WebFetch(domain:open.spotify.com)",
       "Bash(npm ls:*)",
       "Bash(npm run build:prod:*)",
-      "Bash(npx vitest:*)"
+      "Bash(npx vitest:*)",
+      "Bash(dir \"C:\\\\Program Files\\\\PostgreSQL\"\" 2>nul || echo \"Not found in Program Files \")",
+      "Bash(powershell -Command:*)"
     ]
   }
 }

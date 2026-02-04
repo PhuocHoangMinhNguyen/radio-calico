@@ -149,10 +149,15 @@ Features planned to make Radio Calico more modern and production-ready, organize
 
 ### Technical/Production Readiness
 
-- [ ] **13. Error Monitoring**
-  - Integrate error tracking (e.g., Sentry)
-  - Log playback errors and recovery attempts
-  - Location: Error boundary service, `main.ts` initialization
+- [x] **13. Error Monitoring** (COMPLETED)
+  - Centralized error tracking with severity levels (info/warning/error/fatal)
+  - HLS error tracking with recovery attempt monitoring
+  - Media and network error tracking
+  - Global Angular ErrorHandler for unhandled exceptions
+  - **PostgreSQL persistence** via `POST /api/errors` endpoint
+  - Session ID tracking to group errors from same user session
+  - Database table: `error_logs` with indexes on created_at, session_id, severity
+  - Location: `ErrorMonitoringService`, `GlobalErrorHandler` in `app.config.ts`, `server.js`, `db/init.sql`
 
 - [ ] **14. Performance Optimizations**
   - Lazy load non-critical components
