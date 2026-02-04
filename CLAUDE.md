@@ -174,3 +174,11 @@ Features planned to make Radio Calico more modern and production-ready, organize
   - Page title updates with "Track by Artist | Radio Calico" format
   - Meta tags update automatically on track changes
   - Location: `MetaService`, integration in `HlsPlayerService.fetchMetadata()`
+
+- [x] **16. Save for Later (Track Bookmarking)** (COMPLETED)
+  - Bookmark button next to share button to save current track
+  - Collapsible saved tracks list in sidebar
+  - Persisted to localStorage (max 50 tracks)
+  - Remove individual tracks or clear all
+  - Useful for remembering songs to find on Spotify/YouTube later
+  - Location: `BookmarkService`, `BookmarkButton`, `SavedTracks` components

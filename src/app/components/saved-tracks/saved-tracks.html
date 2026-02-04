@@ -1,0 +1,43 @@
+@if (count() > 0) {
+  <div class="saved-tracks">
+    <button
+      class="saved-tracks-header"
+      type="button"
+      (click)="toggleExpanded()"
+      [attr.aria-expanded]="isExpanded()"
+      aria-controls="saved-tracks-list"
+    >
+      <span class="material-icons header-icon" aria-hidden="true">bookmark</span>
+      <span class="header-text">Saved ({{ count() }})</span>
+      <span class="material-icons expand-icon" aria-hidden="true">
+        {{ isExpanded() ? 'expand_less' : 'expand_more' }}
+      </span>
+    </button>
+
+    @if (isExpanded()) {
+      <div id="saved-tracks-list" class="tracks-list" role="list">
+        @for (track of bookmarks(); track $index) {
+          <div class="track-item" role="listitem">
+            <div class="track-info">
+              <span class="track-title">{{ track.title }}</span>
+              <span class="track-artist">{{ track.artist }}</span>
+            </div>
+            <button
+              class="remove-btn"
+              type="button"
+              (click)="removeTrack(track.title, track.artist)"
+              [attr.aria-label]="'Remove ' + track.title + ' from saved tracks'"
+            >
+              <span class="material-icons" aria-hidden="true">close</span>
+            </button>
+          </div>
+        }
+
+        <button class="clear-all-btn" type="button" (click)="clearAll()">
+          <span class="material-icons" aria-hidden="true">delete_sweep</span>
+          <span>Clear all</span>
+        </button>
+      </div>
+    }
+  </div>
+}

@@ -1,0 +1,14 @@
+<button
+  class="bookmark-btn"
+  [class.bookmarked]="isBookmarked()"
+  type="button"
+  (click)="onToggleBookmark()"
+  [disabled]="!hasTrackInfo()"
+  [attr.aria-label]="isBookmarked() ? 'Remove from saved tracks' : 'Save for later'"
+  [attr.aria-pressed]="isBookmarked()"
+>
+  <span class="material-icons" aria-hidden="true">
+    {{ isBookmarked() ? 'bookmark' : 'bookmark_border' }}
+  </span>
+  <span class="btn-text">{{ isBookmarked() ? 'Saved' : 'Save' }}</span>
+</button>
