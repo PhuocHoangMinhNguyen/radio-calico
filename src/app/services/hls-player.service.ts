@@ -5,6 +5,7 @@ import { AnnouncerService } from './announcer.service';
 import { PreferencesService } from './preferences.service';
 import { NotificationService } from './notification.service';
 import { ErrorMonitoringService } from './error-monitoring.service';
+import { MetaService } from './meta.service';
 
 export type PlayerStatus = 'initializing' | 'ready' | 'playing' | 'paused' | 'buffering' | 'error';
 export type ConnectionQuality = 'good' | 'fair' | 'poor';
@@ -21,6 +22,7 @@ export class HlsPlayerService {
   private readonly preferencesService = inject(PreferencesService);
   private readonly notificationService = inject(NotificationService);
   private readonly errorMonitoring = inject(ErrorMonitoringService);
+  private readonly metaService = inject(MetaService);
 
   private hls: Hls | null = null;
   private audioElement: HTMLAudioElement | null = null;
@@ -359,6 +361,9 @@ export class HlsPlayerService {
         const newCoverUrl = `${COVER_URL}?t=${Date.now()}`;
         this._coverUrl.set(newCoverUrl);
         this.updateMediaSessionMetadata(newTrack, newCoverUrl);
+
+        // Update page meta tags and JSON-LD for SEO
+        this.metaService.updateForTrack(newTrack, newCoverUrl);
 
         // Announce track change to screen readers (only if we had a previous track)
         if (current) {

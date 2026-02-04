@@ -168,7 +168,9 @@ Features planned to make Radio Calico more modern and production-ready, organize
   - Separate lazy chunks: sidebar (9 kB), recently-played (3 kB)
   - Location: `app.html` (@defer blocks), component templates
 
-- [ ] **15. SEO & Open Graph**
-  - Dynamic meta tags for current track
-  - Structured data (JSON-LD) for rich search results
-  - Location: `index.html`, dynamic updates in `AppComponent`
+- [x] **15. SEO & Open Graph** (COMPLETED)
+  - Dynamic meta tags for current track (title, description, og:*, twitter:*)
+  - JSON-LD structured data (RadioStation schema with MusicRecording for current track)
+  - Page title updates with "Track by Artist | Radio Calico" format
+  - Meta tags update automatically on track changes
+  - Location: `MetaService`, integration in `HlsPlayerService.fetchMetadata()`
