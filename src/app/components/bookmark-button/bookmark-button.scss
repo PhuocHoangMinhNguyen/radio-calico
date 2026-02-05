@@ -36,12 +36,12 @@
   }
 
   &.bookmarked {
-    color: var(--primary);
-    border-color: var(--primary);
+    color: var(--primary-color);
+    border-color: var(--primary-color);
 
     &:hover:not(:disabled) {
-      color: var(--primary);
-      border-color: var(--primary);
+      color: var(--primary-color);
+      border-color: var(--primary-color);
     }
   }
 }

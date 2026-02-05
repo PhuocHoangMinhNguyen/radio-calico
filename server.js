@@ -253,9 +253,13 @@ const server = http.createServer(async (req, res) => {
     });
 });
 
-server.listen(PORT, () => {
-    console.log(`\n🎵 Radio Calico Server Running!`);
-    console.log(`   Mode:    ${isProduction ? 'Production' : 'API Only (dev)'}`);
-    console.log(`   Local:   http://localhost:${PORT}`);
-    console.log(`\n   Press Ctrl+C to stop\n`);
-});
+if (require.main === module) {
+    server.listen(PORT, () => {
+        console.log(`\n🎵 Radio Calico Server Running!`);
+        console.log(`   Mode:    ${isProduction ? 'Production' : 'API Only (dev)'}`);
+        console.log(`   Local:   http://localhost:${PORT}`);
+        console.log(`\n   Press Ctrl+C to stop\n`);
+    });
+}
+
+module.exports = { server, pool };

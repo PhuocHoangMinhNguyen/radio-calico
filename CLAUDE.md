@@ -4,181 +4,84 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Radio Calico is a lossless internet radio player built with Angular 21 and HLS.js. It streams audio from a CloudFront-hosted HLS endpoint (`https://d3d4yli4hf5bmh.cloudfront.net/hls/live.m3u8`) at 48kHz/24-bit quality.
+Radio Calico is a lossless internet radio player built with Angular 21 and HLS.js. It streams audio from a CloudFront-hosted HLS endpoint (`https://d3d4yli4hf5bmh.cloudfront.net/hls/live.m3u8`) at 48kHz/24-bit quality. There is a backend Node.js server (`server.js`) backed by PostgreSQL for ratings and error logging.
 
 ## Commands
 
-- `npm start` — Dev server on port 3000 with auto-reload
-- `npm run build:prod` — Optimized production build
-- `npm test` — Run unit tests with Vitest (watch mode)
+- `npm run dev` — **Primary dev workflow.** Runs both the Angular dev server (port 3000) and the API server (port 3001) concurrently via `concurrently`. The Angular proxy (`proxy.conf.json`) forwards `/api/*` requests to the Node server.
+- `npm start` — Angular dev server only (port 3000, with proxy). Use if the API server is already running.
+- `npm run start:api` — Node API server only (port 3001). Use if the Angular dev server is already running.
+- `npm run build:prod` — Production build (outputs to `dist/radio-calico/browser/`)
+- `npm run serve:prod` — Build + run production server (single Express-style server on port 3000 that serves both static files and API)
+- `npm test` — Unit tests via Vitest (watch mode)
 - `npm run test:headless` — Single test run (CI-friendly)
-- `npm run serve:prod` — Build and run production server (Express, port 3000, serves from `dist/radio-calico/browser/`)
-
-Individual test files can be targeted via Vitest's CLI filter: `npx vitest run src/app/components/player/player.spec.ts`
+- `npx vitest run src/app/services/bookmark.service.spec.ts` — Run a single test file
 
 ## Architecture
 
-**Standalone components (no NgModules)** — all components use the Angular standalone API.
+### Frontend — Angular 21
 
-**State management via Angular Signals** — `HlsPlayerService` holds all player state as writable signals (`_isPlaying`, `_volume`, `_status`, `_statusMessage`, `_errorMessage`) with public readonly accessors and computed signals (e.g., `statusClass`). No external state library is used.
+**All components are standalone** (no NgModules). State is managed via Angular Signals — no external state library.
 
-**Component hierarchy:**
+**Component tree:**
 ```
-App → Header
-    → Player
-        → LosslessBadge
-        → AudioControls (play/pause via HlsPlayerService)
-        → VolumeControl (slider bound to HlsPlayerService.setVolume)
-        → StatusDisplay (reactive status message + CSS class)
-        → StreamInfo (static format info)
-        → NowPlaying (current track title/artist + album art)
-        → RecentlyPlayed (last 5 tracks from metadata)
+App
+├── Sidebar                          (@defer on idle — lazy chunk)
+│   ├── LosslessBadge
+│   ├── StreamInfo
+│   ├── ListeningStats
+│   ├── SavedTracks                  (collapsible, uses BookmarkService)
+│   ├── NotificationToggle
+│   └── ThemeToggle
+├── NowPlayingHero                   (hero section with album art)
+│   ├── SongRating                   (thumbs up/down, backed by /api/ratings)
+│   ├── BookmarkButton               (save track to localStorage)
+│   ├── ShareButton                  (social share dropdown)
+│   └── ListeningStats               (mobile-only instance)
+├── RecentlyPlayed                   (@defer on viewport — lazy chunk)
+└── PlayerBar                        (owns the <audio> element)
+    ├── SleepTimerButton
+    └── StreamQualityComponent       (desktop-only)
 ```
 
-**HLS streaming** is managed entirely in `HlsPlayerService` using HLS.js with automatic fallback to native HLS (Safari). Error recovery handles both network and media errors.
+**`HlsPlayerService` is the central hub.** It owns the HLS player lifecycle, all playback signals (`isPlaying`, `volume`, `status`, `currentTrack`, `coverUrl`, `recentlyPlayed`), stream quality signals (`bufferHealth`, `bitrate`, `fragmentLatency`), and coordinates track-change side effects: Media Session API updates, screen reader announcements (`AnnouncerService`), browser notifications (`NotificationService`), SEO meta tags (`MetaService`), and error tracking (`ErrorMonitoringService`). `PlayerBar` calls `initializePlayer()` in `ngAfterViewInit` and `destroy()` in `ngOnDestroy`.
 
-**Track metadata** is polled every 10 seconds from a CloudFront JSON endpoint (`metadatav2.json`). The `StreamMetadata` model (in `src/app/models/track-info.ts`) includes current track info, up to 5 previous tracks, and flags like `is_new`, `is_summer`, `is_vidgames`. Album art is fetched from a separate `cover.jpg` endpoint with cache-busting on track changes.
+**Track metadata** is polled every 10 seconds from a CloudFront JSON endpoint (`metadatav2.json`). The `StreamMetadata` model (`src/app/models/track-info.ts`) includes current track, up to 5 previous tracks, and flags like `is_new`, `is_summer`, `is_vidgames`. Album art is fetched from `cover.jpg` with a cache-busting timestamp query param on track change.
 
-**Production server** (`server.js`) is a plain Express server with SPA fallback routing to `index.html`.
+**Lazy loading via `@defer`:** Sidebar uses `@defer (on idle)` and RecentlyPlayed uses `@defer (on viewport)`. Both produce separate lazy chunks (~9 kB and ~3 kB respectively). Do not remove these without good reason — they reduce initial paint time.
+
+### Backend — Node.js + PostgreSQL
+
+`server.js` is a plain `http.createServer` server (not Express). It handles three responsibilities:
+1. **API endpoints** — `GET /api/ratings`, `POST /api/ratings`, `POST /api/errors`
+2. **Static file serving** — from `dist/radio-calico/browser/`
+3. **SPA fallback** — any unmatched route serves `index.html`
+
+PostgreSQL connection uses `pg` Pool. Credentials are read from environment variables (`PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD`) with `dotenv` loading from `.env`. The database schema lives in `db/init.sql` and must be applied manually:
+```bash
+PGPASSWORD=<password> psql -U postgres -d radio_calico -f db/init.sql
+```
+
+**Tables:** `song_ratings` (aggregate thumbs up/down per song), `song_votes` (per-IP vote deduplication), `error_logs` (client-side error reports with session grouping).
+
+**In dev mode** (`npm run dev`), the Node server runs on port 3001 serving API only (no static files). In production (`npm run serve:prod`), it runs on port 3000 serving everything.
+
+### localStorage Keys
+
+- `radio-calico-preferences` — single JSON object: `{ volume, isMuted, theme, notificationsEnabled }`. `PreferencesService` is the single source of truth; `ThemeService` and `NotificationService` read/write through it.
+- `radio-calico-stats` — cumulative listening time in seconds (`StatsService`, saves every 10 s while playing)
+- `radio-calico-bookmarks` — array of `{ title, artist, savedAt }`, max 50 entries (`BookmarkService`)
 
 ## Conventions
 
-- **Styling**: SCSS with CSS custom properties defined in `src/styles.scss` (dark theme, teal primary `#4a9594`)
-- **TypeScript**: Strict mode enabled with `noImplicitOverride`, `noImplicitReturns`, strict templates and injection params
-- **Formatting**: Prettier — 100 char width, single quotes, Angular HTML parser
-- **Template syntax**: Modern Angular control flow (`@if`, `@for`) rather than structural directives
+- **Styling:** SCSS with CSS custom properties for theming. Variables are defined in `src/styles.scss`. Primary color is `--primary-color: #1DB954` (Spotify green). Theme switching is done via `[data-theme]` attribute on `<html>`. Always use `var(--primary-color)`, not `var(--primary)`.
+- **TypeScript:** Strict mode with `noImplicitOverride`, `noImplicitReturns`, strict templates and injection params.
+- **Formatting:** Prettier — 100 char width, single quotes, Angular HTML parser.
+- **Template syntax:** Angular 17+ control flow (`@if`, `@for`, `@defer`) rather than structural directives (`*ngIf`, `*ngFor`).
+- **Icons:** Google Material Icons loaded via Google Fonts CDN. Use `<span class="material-icons">icon_name</span>`.
+- **Accessibility:** All interactive controls need `aria-label`. Toggle buttons need `aria-pressed`. Animations/transitions should respect `prefers-reduced-motion`.
 
-## Feature Roadmap
+## Blocked / Known Limitations
 
-Features planned to make Radio Calico more modern and production-ready, organized by priority.
-
-### High Priority - Production Essentials
-
-- [x] **1. Media Session API Integration** (COMPLETED)
-  - Lock screen controls on mobile devices
-  - Hardware media keys support (keyboard play/pause/volume)
-  - OS notification center showing track info and album art
-  - Bluetooth headset button support
-  - Location: `HlsPlayerService.setupMediaSession()` and `updateMediaSessionMetadata()`
-
-- [x] **2. Keyboard Shortcuts** (COMPLETED)
-  - `Space` — Play/Pause
-  - `↑/↓` — Volume up/down (5% increments)
-  - `M` — Mute toggle
-  - `L` — Like/unlike current track
-  - Location: `KeyboardShortcutService` + `@HostListener` in `App` component
-
-- [x] **3. PWA (Progressive Web App)** (COMPLETED)
-  - Web App Manifest (`manifest.webmanifest`) for installability
-  - Angular Service Worker for caching static assets
-  - iOS PWA meta tags for home screen support
-  - App icons (192x192, 512x512 + maskable)
-  - CDN preconnect for faster streaming
-  - Location: `src/manifest.webmanifest`, `ngsw-config.json`, `src/app/app.config.ts`
-
-- [x] **4. Accessibility (WCAG 2.2 Compliance)** (COMPLETED)
-  - ARIA labels on all interactive controls (play/pause, mute, volume slider, rating buttons)
-  - Visible focus indicators (`:focus-visible` with 3px primary color outline)
-  - Screen reader announcements for track changes via live regions
-  - `prefers-reduced-motion` support (disables all transitions/animations)
-  - Color contrast compliance (4.5:1 minimum, `--text-subdued` updated to #787878)
-  - Skip link for keyboard users
-  - No auto-play without user interaction
-  - Location: `styles.scss`, `AnnouncerService`, component templates
-
-### Medium Priority - User Engagement
-
-- [ ] **5. Audio Visualization** (BLOCKED - CORS)
-  - Spectrum analyzer/equalizer bars reacting to music
-  - Use Web Audio API `AnalyserNode`
-  - Canvas-based rendering for performance
-  - Note: Requires CORS headers on CloudFront HLS stream for Web Audio API to access frequency data
-  - Location: New `AudioVisualizerComponent`
-
-- [x] **6. Social Sharing** (COMPLETED)
-  - Share current track to Twitter/X, Facebook
-  - Copy shareable link to clipboard
-  - Native Web Share API on mobile devices
-  - Open Graph meta tags for rich previews
-  - Location: `ShareService`, `ShareButton` component, `index.html` meta tags
-
-- [x] **7. User Preferences Persistence** (COMPLETED)
-  - Remember volume level across sessions
-  - Mute state persistence
-  - Store in `localStorage`
-  - Location: `PreferencesService`, integrations in `HlsPlayerService` and `KeyboardShortcutService`
-
-- [x] **8. Track Change Notifications** (COMPLETED)
-  - Browser Notification API for track changes when app is backgrounded
-  - Request permission UI in sidebar
-  - Toggle to enable/disable notifications
-  - Notification click returns focus to app
-  - Preference persisted in localStorage
-  - Location: `NotificationService`, `NotificationToggle` component, `Sidebar`
-
-### Lower Priority - Polish & Extras
-
-- [x] **9. Sleep Timer** (COMPLETED)
-  - Auto-stop after 15/30/60/90 minutes
-  - Visual countdown indicator in player bar
-  - Dropdown menu to select duration
-  - Cancel option when timer is active
-  - Available on both desktop and mobile
-  - Location: `SleepTimerService`, `SleepTimerButton` component, integrated in `PlayerBar`
-
-- [x] **10. Listening Statistics** (COMPLETED)
-  - Track total listening time while playing
-  - Display "You've listened for X hours/minutes"
-  - Persisted to `localStorage` (saves every 10 seconds)
-  - Automatic tracking starts/stops with playback
-  - Location: `StatsService`, `ListeningStats` component in sidebar
-
-- [x] **11. Theme Customization** (COMPLETED)
-  - Dark/light mode toggle with persisted preference
-  - CSS custom properties switching via `data-theme` attribute
-  - Light theme with proper contrast ratios
-  - Theme toggle in sidebar (desktop) and now-playing-hero (mobile)
-  - Location: `ThemeService`, `ThemeToggle` component, `styles.scss`
-
-- [x] **12. Stream Quality Indicator** (COMPLETED)
-  - Show buffer health status
-  - Display current bitrate
-  - Connection quality badge (good/fair/poor)
-  - Desktop-only display (hidden on mobile for space)
-  - Location: `HlsPlayerService` (buffer, bitrate, latency signals), `StreamQualityComponent` in `PlayerBar`
-
-### Technical/Production Readiness
-
-- [x] **13. Error Monitoring** (COMPLETED)
-  - Centralized error tracking with severity levels (info/warning/error/fatal)
-  - HLS error tracking with recovery attempt monitoring
-  - Media and network error tracking
-  - Global Angular ErrorHandler for unhandled exceptions
-  - **PostgreSQL persistence** via `POST /api/errors` endpoint
-  - Session ID tracking to group errors from same user session
-  - Database table: `error_logs` with indexes on created_at, session_id, severity
-  - Location: `ErrorMonitoringService`, `GlobalErrorHandler` in `app.config.ts`, `server.js`, `db/init.sql`
-
-- [x] **14. Performance Optimizations** (COMPLETED)
-  - `@defer (on idle)` for sidebar (desktop-only, loads after initial render)
-  - `@defer (on viewport)` for recently-played section (loads when scrolled into view)
-  - Native `loading="lazy"` and `decoding="async"` for below-fold images
-  - `fetchpriority="high"` for hero album art (LCP optimization)
-  - CDN preconnect already in place (`index.html`)
-  - Separate lazy chunks: sidebar (9 kB), recently-played (3 kB)
-  - Location: `app.html` (@defer blocks), component templates
-
-- [x] **15. SEO & Open Graph** (COMPLETED)
-  - Dynamic meta tags for current track (title, description, og:*, twitter:*)
-  - JSON-LD structured data (RadioStation schema with MusicRecording for current track)
-  - Page title updates with "Track by Artist | Radio Calico" format
-  - Meta tags update automatically on track changes
-  - Location: `MetaService`, integration in `HlsPlayerService.fetchMetadata()`
-
-- [x] **16. Save for Later (Track Bookmarking)** (COMPLETED)
-  - Bookmark button next to share button to save current track
-  - Collapsible saved tracks list in sidebar
-  - Persisted to localStorage (max 50 tracks)
-  - Remove individual tracks or clear all
-  - Useful for remembering songs to find on Spotify/YouTube later
-  - Location: `BookmarkService`, `BookmarkButton`, `SavedTracks` components
+- **Audio Visualization** — Requires CORS headers on the CloudFront HLS stream for Web Audio API `AnalyserNode` access to frequency data. Blocked until the CDN is reconfigured.
+- **Bundle size warning** — The initial bundle exceeds the 500 kB budget due to HLS.js (~660 kB). This is expected and unavoidable for an HLS streaming app. The warning in `ng build` output is not actionable.

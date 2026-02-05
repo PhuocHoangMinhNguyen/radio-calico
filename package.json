@@ -11,6 +11,7 @@
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
     "test:headless": "ng test --watch=false",
+    "test:api": "vitest run --config vitest.config.js",
     "serve:prod": "npm run build:prod && node server.js"
   },
   "prettier": {
