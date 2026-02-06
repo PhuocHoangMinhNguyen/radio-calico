@@ -51,6 +51,11 @@ describe('ShareService', () => {
 
     it('should return false when navigator.share does not exist', () => {
       delete (globalThis.navigator as any).share;
+      // Reset TestBed to force creation of a new service instance
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [ShareService, { provide: HlsPlayerService, useValue: mockHlsService }],
+      });
       const newService = TestBed.inject(ShareService);
       expect(newService.canUseNativeShare()).toBe(false);
     });

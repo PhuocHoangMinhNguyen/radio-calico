@@ -212,8 +212,8 @@ describe('PreferencesService', () => {
     it('logs a warning and continues when localStorage.setItem fails', () => {
       const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-      // Make setItem throw an error (e.g., quota exceeded)
-      vi.spyOn(Storage.prototype, 'setItem').mockImplementationOnce(() => {
+      // Spy on the actual localStorage object (the stubbed one)
+      const setItemSpy = vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
         throw new DOMException('QuotaExceededError');
       });
 
@@ -228,6 +228,7 @@ describe('PreferencesService', () => {
         expect.any(DOMException)
       );
 
+      setItemSpy.mockRestore();
       consoleWarnSpy.mockRestore();
     });
   });
