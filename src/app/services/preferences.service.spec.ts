@@ -115,6 +115,7 @@ describe('PreferencesService', () => {
   describe('setVolume', () => {
     it('sets volume and persists to localStorage', () => {
       service.setVolume(0.6);
+      TestBed.flushEffects(); // Flush effect to trigger auto-save
 
       expect(service.volume()).toBe(0.6);
 
@@ -137,6 +138,7 @@ describe('PreferencesService', () => {
   describe('setMuted', () => {
     it('sets muted state and persists to localStorage', () => {
       service.setMuted(true);
+      TestBed.flushEffects(); // Flush effect to trigger auto-save
 
       expect(service.isMuted()).toBe(true);
 
@@ -151,6 +153,7 @@ describe('PreferencesService', () => {
   describe('setTheme', () => {
     it('sets theme and persists to localStorage', () => {
       service.setTheme('light');
+      TestBed.flushEffects(); // Flush effect to trigger auto-save
 
       expect(service.theme()).toBe('light');
 
@@ -165,6 +168,7 @@ describe('PreferencesService', () => {
   describe('setNotificationsEnabled', () => {
     it('sets notification preference and persists to localStorage', () => {
       service.setNotificationsEnabled(true);
+      TestBed.flushEffects(); // Flush effect to trigger auto-save
 
       expect(service.notificationsEnabled()).toBe(true);
 
@@ -186,6 +190,7 @@ describe('PreferencesService', () => {
 
       // Reset
       service.resetToDefaults();
+      TestBed.flushEffects(); // Flush effect to trigger auto-save
 
       expect(service.volume()).toBe(0.8);
       expect(service.isMuted()).toBe(false);
@@ -213,6 +218,7 @@ describe('PreferencesService', () => {
       });
 
       service.setVolume(0.5);
+      TestBed.flushEffects(); // Flush effect to trigger auto-save (which will fail)
 
       // Service still updates in-memory state
       expect(service.volume()).toBe(0.5);

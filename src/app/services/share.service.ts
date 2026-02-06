@@ -1,4 +1,4 @@
-import { Injectable, inject } from '@angular/core';
+import { Injectable, inject, signal } from '@angular/core';
 import { HlsPlayerService } from './hls-player.service';
 
 export interface ShareData {
@@ -23,10 +23,9 @@ export class ShareService {
 
   /**
    * Check if Web Share API is available (typically on mobile).
+   * Exposed as a signal for reactivity in components.
    */
-  get canUseNativeShare(): boolean {
-    return 'share' in navigator;
-  }
+  readonly canUseNativeShare = signal('share' in navigator);
 
   /**
    * Get current track share data.
@@ -55,7 +54,7 @@ export class ShareService {
    */
   async shareNative(): Promise<boolean> {
     const data = this.getShareData();
-    if (!data || !this.canUseNativeShare) return false;
+    if (!data || !this.canUseNativeShare()) return false;
 
     try {
       await navigator.share({

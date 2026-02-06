@@ -17,7 +17,7 @@
     }
   </button>
 
-  @if (isMenuOpen() && !canUseNativeShare) {
+  @if (isMenuOpen() && !canUseNativeShare()) {
     <div class="share-menu" role="menu" aria-label="Share options">
       <button
         class="menu-item"

@@ -31,7 +31,7 @@ export class ShareButton {
 
   async onShare(): Promise<void> {
     // On mobile, use native share API
-    if (this.canUseNativeShare) {
+    if (this.canUseNativeShare()) {
       await this.shareService.shareNative();
     } else {
       // On desktop, toggle dropdown menu

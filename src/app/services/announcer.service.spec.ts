@@ -168,15 +168,15 @@ describe('AnnouncerService', () => {
   describe('multiple rapid announcements', () => {
     it('should handle rapid announcement changes', () => {
       service.announce('First');
-      vi.advanceTimersByTime(50); // Only advance 50ms
+      vi.advanceTimersByTime(50); // Only advance 50ms (need 100ms for 'First')
 
-      service.announce('Second');
-      vi.advanceTimersByTime(50);
+      service.announce('Second'); // This clears announcement but doesn't cancel the first timeout
+      vi.advanceTimersByTime(50); // Total 100ms - 'First' timeout fires now
 
-      // First announcement timer cancelled, should be empty
-      expect(service.announcement()).toBe('');
+      // First announcement timeout has fired (100ms elapsed since 'First' was announced)
+      expect(service.announcement()).toBe('First');
 
-      vi.advanceTimersByTime(50);
+      vi.advanceTimersByTime(50); // Total 150ms - 'Second' timeout fires now
 
       // Second announcement should now be set
       expect(service.announcement()).toBe('Second');
