@@ -6,17 +6,31 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Radio Calico is a lossless internet radio player built with Angular 21 and HLS.js. It streams audio from a CloudFront-hosted HLS endpoint (`https://d3d4yli4hf5bmh.cloudfront.net/hls/live.m3u8`) at 48kHz/24-bit quality. There is a backend Node.js server (`server.js`) backed by PostgreSQL for ratings and error logging.
 
+**Prerequisites:**
+- **Node.js** ≥22.12 or ≥20.19 (Node 22 recommended)
+- **PostgreSQL** 16+ (or use Docker Compose)
+- **Docker** (optional, recommended for development)
+
 ## Commands
 
+### npm Commands (Local Development)
 - `npm run dev` — **Primary dev workflow.** Runs both the Angular dev server (port 3000) and the API server (port 3001) concurrently via `concurrently`. The Angular proxy (`proxy.conf.json`) forwards `/api/*` requests to the Node server.
 - `npm start` — Angular dev server only (port 3000, with proxy). Use if the API server is already running.
 - `npm run start:api` — Node API server only (port 3001). Use if the Angular dev server is already running.
 - `npm run build:prod` — Production build (outputs to `dist/radio-calico/browser/`)
-- `npm run serve:prod` — Build + run production server (single Express-style server on port 3000 that serves both static files and API)
+- `npm run serve:prod` — Build + run production server (single server on port 3000 that serves both static files and API)
 - `npm test` — Frontend unit tests via Vitest (watch mode)
 - `npm run test:headless` — Frontend tests, single run (CI-friendly)
 - `npm run test:api` — Backend tests only (runs server.test.js via Vitest 3.x)
 - `npx vitest run src/app/services/bookmark.service.spec.ts` — Run a single test file
+
+### Docker Commands
+- `docker-compose up` — Start development environment (Angular dev server, API server, PostgreSQL)
+- `docker-compose --profile tools up` — Start dev environment with Adminer database UI (http://localhost:8080)
+- `docker-compose -f docker-compose.prod.yml up` — Start production environment (optimized build)
+- `docker-compose down` — Stop and remove containers
+- `docker-compose run --rm app npm run test:api` — Run backend tests in Docker
+- `docker-compose run --rm app npm run test:headless` — Run frontend tests in Docker
 
 ## Architecture
 
@@ -84,6 +98,65 @@ Two separate test configurations:
 **Testing patterns:**
 - Frontend tests must stub `localStorage` using `vi.stubGlobal('localStorage', inMemoryMock)` at module top level. Node 25's built-in localStorage is broken in test environments.
 - Backend tests patch `pool.query` directly in `beforeAll`. Vitest's `vi.mock` does not intercept CJS `require()` calls.
+
+## Docker Setup
+
+The project uses multi-stage Docker builds with Alpine Linux for minimal image sizes.
+
+### Dockerfile Stages
+1. **base** — Node 22 Alpine with dependencies installed (`npm ci --legacy-peer-deps`)
+2. **development** — Full source with hot-reload support, exposes ports 3000 (Angular) and 3001 (API)
+3. **builder** — Production build of Angular app (`npm run build:prod`)
+4. **production** — Minimal runtime with only prod dependencies, non-root user, serves everything on port 3000
+
+### docker-compose.yml (Development)
+- **app** service: Angular dev server + API server with volume mounts for hot-reload
+- **db** service: PostgreSQL 16 with auto-initialization from `db/init.sql`
+- **adminer** service (optional, `--profile tools`): Database management UI on port 8080
+- Networking: All services on `radio_calico_network_dev` bridge network
+
+### docker-compose.prod.yml (Production)
+- **app** service: Production build with resource limits, read-only filesystem, security hardening
+- **db** service: PostgreSQL with tighter resource limits, no exposed port (internal only)
+- Health checks on both services
+- Non-root user (`nodejs`) for security
+
+**Important Docker notes:**
+- The Dockerfile includes `--legacy-peer-deps` flag for `npm ci` to handle the intentional Vitest version mismatch
+- Development volumes exclude `node_modules` and `.angular` directories to prevent host/container conflicts
+- Production image uses `--omit=dev` to exclude dev dependencies
+
+## CI/CD
+
+GitHub Actions workflow (`.github/workflows/docker-build.yml`) runs on push/PR to `master` branch:
+
+### Build Job
+1. Checkout code
+2. Set up Docker Buildx for multi-platform builds
+3. Log in to GitHub Container Registry (ghcr.io)
+4. Extract Docker metadata (tags, labels)
+5. Build and push production image (`target: production`)
+6. Build development image for verification (`target: development`, push: false)
+7. Uses GitHub Actions cache for layer caching
+
+### Test Job (depends on build)
+1. Start PostgreSQL 16 service container
+2. Set up Node.js 22
+3. Install dependencies (`npm ci --legacy-peer-deps`)
+4. Initialize test database from `db/init.sql`
+5. Run backend tests (`npm run test:api`)
+6. Run frontend tests (`npm run test:headless`)
+
+**Images are published to:** `ghcr.io/phuochoangminhnguyen/radio-calico:latest`
+
+**Other workflows:**
+- `.github/workflows/claude.yml` — Claude Code integration for `@claude` mentions in issues/PRs
+- `.github/workflows/claude-code-review.yml` — Automatic code review on PR creation
+
+**Important CI/CD notes:**
+- Node.js version in CI **must** be ≥22.12 or ≥20.19 to satisfy Angular 21 requirements
+- `npm ci` requires `--legacy-peer-deps` flag due to Vitest version mismatch
+- PostgreSQL service uses health checks to ensure database is ready before tests run
 
 ## Conventions
 

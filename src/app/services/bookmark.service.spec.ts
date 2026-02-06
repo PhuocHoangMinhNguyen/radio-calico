@@ -48,7 +48,9 @@ describe('BookmarkService', () => {
     ];
     localStorage.setItem('radio-calico-bookmarks', JSON.stringify(stored));
 
-    // Re-inject service to trigger loadFromStorage
+    // Reset TestBed and create a new service instance to trigger loadFromStorage
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({ providers: [BookmarkService] });
     service = TestBed.inject(BookmarkService);
 
     expect(service.bookmarks()).toEqual(stored);
@@ -60,6 +62,9 @@ describe('BookmarkService', () => {
 
     const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
+    // Reset TestBed and create a new service instance to trigger loadFromStorage
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({ providers: [BookmarkService] });
     service = TestBed.inject(BookmarkService);
 
     expect(service.bookmarks()).toEqual([]);
@@ -219,7 +224,8 @@ describe('BookmarkService', () => {
       const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
       // Make setItem throw an error (e.g., quota exceeded)
-      vi.spyOn(Storage.prototype, 'setItem').mockImplementationOnce(() => {
+      const originalSetItem = localStorage.setItem;
+      localStorage.setItem = vi.fn(() => {
         throw new DOMException('QuotaExceededError');
       });
 
@@ -234,6 +240,7 @@ describe('BookmarkService', () => {
       );
 
       consoleWarnSpy.mockRestore();
+      localStorage.setItem = originalSetItem;
     });
   });
 });

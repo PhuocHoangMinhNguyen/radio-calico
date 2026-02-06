@@ -280,6 +280,8 @@ describe('KeyboardShortcutService', () => {
     it('should not handle events when target is contentEditable', () => {
       const div = document.createElement('div');
       div.contentEditable = 'true';
+      // Explicitly set isContentEditable for the test environment
+      Object.defineProperty(div, 'isContentEditable', { value: true, configurable: true });
       const event = new KeyboardEvent('keydown', { key: ' ' });
       Object.defineProperty(event, 'target', { value: div });
 
@@ -295,7 +297,8 @@ describe('KeyboardShortcutService', () => {
 
       const handled = service.handleKeyboardEvent(event);
 
-      expect(handled).toBe(false);
+      expect(handled).toBe(true); // Should handle the event when no element is focused
+      expect(mockTogglePlayPause).toHaveBeenCalled();
     });
   });
 
@@ -341,7 +344,30 @@ describe('KeyboardShortcutService', () => {
     });
 
     it('should initialize with preferences isMuted value', () => {
-      mockPreferencesService.isMuted.set(true);
+      // Need to create a new service with isMuted=true in preferences
+      const newMockPreferencesService = {
+        volume: signal(0.8),
+        isMuted: signal(true), // Set to true before service creation
+        setMuted: mockSetMuted,
+      };
+
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [
+          KeyboardShortcutService,
+          {
+            provide: HlsPlayerService,
+            useValue: {
+              togglePlayPause: mockTogglePlayPause,
+              setVolume: mockSetVolume,
+              volume: volumeSignal,
+              currentTrack: signal({ title: 'Test Song', artist: 'Test Artist' }),
+            },
+          },
+          { provide: RatingService, useValue: { submitRating: mockSubmitRating, userRating: userRatingSignal } },
+          { provide: PreferencesService, useValue: newMockPreferencesService },
+        ],
+      });
       const newService = TestBed.inject(KeyboardShortcutService);
       expect(newService.isMuted()).toBe(true);
     });
