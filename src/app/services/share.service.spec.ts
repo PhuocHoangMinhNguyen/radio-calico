@@ -46,13 +46,13 @@ describe('ShareService', () => {
 
   describe('canUseNativeShare', () => {
     it('should return true when navigator.share exists', () => {
-      expect(service.canUseNativeShare).toBe(true);
+      expect(service.canUseNativeShare()).toBe(true);
     });
 
     it('should return false when navigator.share does not exist', () => {
       delete (globalThis.navigator as any).share;
       const newService = TestBed.inject(ShareService);
-      expect(newService.canUseNativeShare).toBe(false);
+      expect(newService.canUseNativeShare()).toBe(false);
     });
   });
 
