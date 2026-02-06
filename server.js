@@ -5,6 +5,7 @@ const path = require('path');
 const { Pool } = require('pg');
 
 // Prevent crashes from unhandled errors
+// TODO
 process.on('uncaughtException', (err) => {
     console.error('Uncaught Exception:', err);
 });
