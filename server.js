@@ -66,6 +66,20 @@ const server = http.createServer(async (req, res) => {
 
     const parsedUrl = new URL(req.url, `http://localhost:${PORT}`);
 
+    // CORS headers for dev mode (allows cross-origin API testing)
+    if (!isProduction) {
+        res.setHeader('Access-Control-Allow-Origin', 'http://localhost:3000');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+        // Handle preflight requests
+        if (req.method === 'OPTIONS') {
+            res.writeHead(204);
+            res.end();
+            return;
+        }
+    }
+
     // API: GET /api/ratings?title=X&artist=Y
     if (req.method === 'GET' && parsedUrl.pathname === '/api/ratings') {
         const title = parsedUrl.searchParams.get('title');
