@@ -1,0 +1,122 @@
+# docker-compose.prod.yml — Production Environment
+# Single Node.js server on port 3000 (serves both static files and API) + PostgreSQL
+# Optimized for production with security hardening and resource limits
+
+services:
+  # PostgreSQL database service - production
+  db:
+    image: postgres:16.6-alpine3.21
+    container_name: radio-calico-db-prod
+    restart: always
+
+    environment:
+      POSTGRES_DB: ${PGDATABASE:-radio_calico}
+      POSTGRES_USER: ${PGUSER:-postgres}
+      POSTGRES_PASSWORD: ${PGPASSWORD:-changeme}
+      POSTGRES_HOST_AUTH_METHOD: scram-sha-256
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+
+    volumes:
+      # Persistent data volume
+      - postgres_data_prod:/var/lib/postgresql/data
+      # Database initialization script
+      - ./db/init.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+
+    # Do NOT expose PostgreSQL port in production
+    # Uncomment only for debugging (use SSH tunnel instead)
+    # ports:
+    #   - "5432:5432"
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d radio_calico"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+    networks:
+      - radio-calico-network
+
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/run/postgresql
+
+  # Radio Calico application - production mode
+  app:
+    build:
+      context: .
+      target: production
+      dockerfile: Dockerfile
+
+    container_name: radio-calico-app-prod
+    restart: always
+
+    environment:
+      # Database connection
+      PGHOST: db
+      PGPORT: 5432
+      PGDATABASE: ${PGDATABASE:-radio_calico}
+      PGUSER: ${PGUSER:-postgres}
+      PGPASSWORD: ${PGPASSWORD:-changeme}
+
+      # Server config
+      NODE_ENV: production
+      PORT: 3000
+
+    ports:
+      - "${APP_PORT:-3000}:3000"
+
+    depends_on:
+      db:
+        condition: service_healthy
+
+    networks:
+      - radio-calico-network
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  postgres_data_prod:
+    name: radio_calico_postgres_prod
+
+networks:
+  radio-calico-network:
+    name: radio_calico_network_prod
+    driver: bridge

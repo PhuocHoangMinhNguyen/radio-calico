@@ -1,0 +1,69 @@
+# .dockerignore for Radio Calico
+# Excludes unnecessary files from Docker build context to reduce image size and build time
+
+# Node.js
+node_modules
+npm-debug.log
+yarn-error.log
+package-lock.json.bak
+
+# Build outputs
+dist
+.angular
+*.tsbuildinfo
+
+# Development files
+.vscode
+.idea
+.claude
+*.swp
+*.swo
+*~
+
+# Testing
+coverage
+*.spec.ts
+*.test.js
+vitest.config.js
+server.test.js
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# CI/CD
+.github
+.gitlab-ci.yml
+.travis.yml
+
+# Environment files (secrets should NEVER be in images)
+.env
+.env.*
+!.env.example
+
+# Documentation
+README.md
+CLAUDE.md
+DOCKER.md
+*.md
+!package.json
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+logs
+*.log
+
+# Temporary files
+tmp
+temp
+nul
+
+# Docker files themselves
+Dockerfile*
+docker-compose*.yml
+.dockerignore

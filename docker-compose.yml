@@ -1,0 +1,111 @@
+# docker-compose.yml — Development Environment
+# Runs Angular dev server (port 3000) + API server (port 3001) + PostgreSQL
+# Includes volume mounts for hot-reload during development
+
+services:
+  # PostgreSQL database service
+  db:
+    image: postgres:16.6-alpine3.21
+    container_name: radio-calico-db-dev
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: radio_calico
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${PGPASSWORD:-radiocalico_dev_password}
+      POSTGRES_HOST_AUTH_METHOD: scram-sha-256
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+
+    volumes:
+      # Persistent data volume
+      - postgres_data_dev:/var/lib/postgresql/data
+      # Database initialization script
+      - ./db/init.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+
+    ports:
+      - "5432:5432"
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d radio_calico"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+    networks:
+      - radio-calico-network
+
+  # Radio Calico application - development mode
+  app:
+    build:
+      context: .
+      target: development
+      dockerfile: Dockerfile
+
+    container_name: radio-calico-app-dev
+    restart: unless-stopped
+
+    # Bind mount source for hot-reload
+    volumes:
+      - .:/app:cached
+      - /app/node_modules
+      - /app/.angular
+
+    environment:
+      # Database connection
+      PGHOST: db
+      PGPORT: 5432
+      PGDATABASE: radio_calico
+      PGUSER: postgres
+      PGPASSWORD: ${PGPASSWORD:-radiocalico_dev_password}
+
+      # Server config
+      NODE_ENV: development
+      PORT: 3001
+
+    ports:
+      # Angular dev server
+      - "3000:3000"
+      # API server
+      - "3001:3001"
+
+    depends_on:
+      db:
+        condition: service_healthy
+
+    networks:
+      - radio-calico-network
+
+    # Override CMD to ensure both servers start
+    command: npm run dev
+
+  # Adminer - optional database management UI
+  adminer:
+    image: adminer:4.8.1
+    container_name: radio-calico-adminer
+    restart: unless-stopped
+
+    ports:
+      - "8080:8080"
+
+    environment:
+      ADMINER_DEFAULT_SERVER: db
+      ADMINER_DESIGN: nette
+
+    depends_on:
+      - db
+
+    networks:
+      - radio-calico-network
+
+    profiles:
+      - tools
+
+volumes:
+  postgres_data_dev:
+    name: radio_calico_postgres_dev
+
+networks:
+  radio-calico-network:
+    name: radio_calico_network_dev
+    driver: bridge
