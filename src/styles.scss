@@ -29,6 +29,11 @@
   --error-color: #e91429;
   --success-color: #1DB954;
 
+  /* Stream quality indicators */
+  --quality-good: #4caf50;
+  --quality-fair: #ff9800;
+  --quality-poor: #f44336;
+
   /* Layout dimensions */
   --sidebar-width: 240px;
   --player-bar-height: 90px;
@@ -70,6 +75,11 @@
   --border-color: #c9c0b2;
   --error-color: #c62828;
   --success-color: #1DB954;
+
+  /* Stream quality indicators */
+  --quality-good: #2e7d32;
+  --quality-fair: #f57c00;
+  --quality-poor: #c62828;
 }
 
 /* CSS Reset */

@@ -46,8 +46,7 @@ export class PlayerBar implements AfterViewInit, OnDestroy {
   volumeIcon = computed(() => {
     const vol = this.volume();
     if (this.isMuted() || vol === 0) return 'volume_off';
-    if (vol < 0.3) return 'volume_mute';
-    if (vol < 0.7) return 'volume_down';
+    if (vol < 0.7) return 'volume_down'; // Low to medium volume
     return 'volume_up';
   });
 

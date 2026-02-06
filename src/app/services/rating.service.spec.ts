@@ -33,7 +33,7 @@ function mockResponse(data: unknown, status = 200): Response {
 
 describe('RatingService', () => {
   let service: RatingService;
-  let fetchSpy: ReturnType<typeof vi.spyOn>;
+  let fetchSpy: any; // vi.spyOn return type varies by Vitest version
 
   beforeEach(() => {
     lsStore = {};
@@ -98,6 +98,42 @@ describe('RatingService', () => {
       await service.fetchRatings('Song', 'Artist');
 
       expect(service.ratings()).toEqual({ thumbs_up: 0, thumbs_down: 0 });
+    });
+
+    it('aborts previous fetch when a new track triggers fetchRatings', async () => {
+      let resolveSong1: ((value: Response) => void) | undefined;
+      let resolveSong2: ((value: Response) => void) | undefined;
+
+      // First fetch for Song 1 — hold it open
+      fetchSpy.mockImplementationOnce(
+        (_url: RequestInfo | URL, init?: RequestInit) =>
+          new Promise<Response>((resolve, reject) => {
+            resolveSong1 = resolve;
+            // Abort signal should fire rejection
+            if (init?.signal) {
+              init.signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
+            }
+          })
+      );
+
+      // Second fetch for Song 2 — also hold it open
+      fetchSpy.mockImplementationOnce(
+        () => new Promise<Response>((r) => { resolveSong2 = r; })
+      );
+
+      const p1 = service.fetchRatings('Song 1', 'Artist 1');
+      const p2 = service.fetchRatings('Song 2', 'Artist 2'); // aborts p1
+
+      // Resolve Song 1 (after abort) — should be ignored
+      resolveSong1!(mockResponse({ thumbs_up: 99, thumbs_down: 99 }));
+      await p1;
+
+      // Resolve Song 2 (current) — should update signals
+      resolveSong2!(mockResponse({ thumbs_up: 5, thumbs_down: 3 }));
+      await p2;
+
+      // Ratings should reflect Song 2, not the stale Song 1 response
+      expect(service.ratings()).toEqual({ thumbs_up: 5, thumbs_down: 3 });
     });
   });
 

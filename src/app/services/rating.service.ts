@@ -9,17 +9,25 @@ const STORAGE_PREFIX = 'rated:';
 export class RatingService {
   private _ratings = signal<SongRatings>({ thumbs_up: 0, thumbs_down: 0 });
   private _userRating = signal<'up' | 'down' | null>(null);
+  private _abortController: AbortController | null = null;
 
   readonly ratings = this._ratings.asReadonly();
   readonly userRating = this._userRating.asReadonly();
 
   async fetchRatings(title: string, artist: string): Promise<void> {
+    // Cancel previous fetch to prevent stale responses from overwriting fresh data
+    if (this._abortController) {
+      this._abortController.abort();
+    }
+    this._abortController = new AbortController();
+    const signal = this._abortController.signal;
+
     this._ratings.set({ thumbs_up: 0, thumbs_down: 0 });
     this._userRating.set(this.getStoredRating(title, artist));
 
     try {
       const params = new URLSearchParams({ title, artist });
-      const response = await fetch(`/api/ratings?${params}`);
+      const response = await fetch(`/api/ratings?${params}`, { signal });
       if (!response.ok) return;
       const data: SongRatings = await response.json();
       this._ratings.set({ thumbs_up: data.thumbs_up, thumbs_down: data.thumbs_down });
@@ -28,6 +36,10 @@ export class RatingService {
         this._userRating.set(data.user_vote);
       }
     } catch (e) {
+      // Ignore AbortError (expected when track changes)
+      if (e instanceof Error && e.name === 'AbortError') {
+        return;
+      }
       console.warn('Failed to fetch ratings:', e);
     }
   }

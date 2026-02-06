@@ -102,92 +102,115 @@ const server = http.createServer(async (req, res) => {
 
     // API: POST /api/ratings
     if (req.method === 'POST' && parsedUrl.pathname === '/api/ratings') {
+        let client;
+        let body;
         try {
-            const body = JSON.parse(await readBody(req));
+            body = JSON.parse(await readBody(req));
+        } catch (err) {
+            if (err instanceof SyntaxError) {
+                return sendJson(res, 400, { error: 'Invalid JSON body' });
+            }
+            throw err;
+        }
+        try {
             const { title, artist, rating } = body;
             if (!title || !artist || (rating !== 'up' && rating !== 'down')) {
                 return sendJson(res, 400, { error: 'title, artist, and rating ("up" or "down") are required' });
             }
 
             const clientIp = getClientIp(req);
+            client = await pool.connect();
+            await client.query('BEGIN');
 
-            // Check if this IP has already voted for this song
-            const existingVote = await pool.query(
+            const existingVote = await client.query(
                 'SELECT vote FROM song_votes WHERE song_title = $1 AND song_artist = $2 AND ip_address = $3',
                 [title, artist, clientIp]
             );
 
+            let thumbs_up, thumbs_down;
+
             if (existingVote.rows.length > 0) {
                 const oldVote = existingVote.rows[0].vote;
 
-                // If same vote, return current state
+                if (oldVote !== 'up' && oldVote !== 'down') {
+                    console.error('Corrupted vote value in song_votes:', oldVote);
+                    await client.query('ROLLBACK');
+                    return sendJson(res, 500, { error: 'Internal data integrity error' });
+                }
+
                 if (oldVote === rating) {
-                    const current = await pool.query(
+                    // Same vote — read current state, no mutation needed
+                    const current = await client.query(
                         'SELECT thumbs_up, thumbs_down FROM song_ratings WHERE song_title = $1 AND song_artist = $2',
                         [title, artist]
                     );
                     const ratings = current.rows[0] || { thumbs_up: 0, thumbs_down: 0 };
-                    return sendJson(res, 200, {
-                        thumbs_up: ratings.thumbs_up,
-                        thumbs_down: ratings.thumbs_down,
-                        user_vote: rating
-                    });
-                }
+                    thumbs_up = ratings.thumbs_up;
+                    thumbs_down = ratings.thumbs_down;
+                } else {
+                    // Change vote: update the vote record and adjust aggregates
+                    await client.query(
+                        'UPDATE song_votes SET vote = $1 WHERE song_title = $2 AND song_artist = $3 AND ip_address = $4',
+                        [rating, title, artist, clientIp]
+                    );
 
-                // Change vote: update the vote record
-                await pool.query(
-                    'UPDATE song_votes SET vote = $1 WHERE song_title = $2 AND song_artist = $3 AND ip_address = $4',
-                    [rating, title, artist, clientIp]
+                    const oldColumn = oldVote === 'up' ? 'thumbs_up' : 'thumbs_down';
+                    const newColumn = rating === 'up' ? 'thumbs_up' : 'thumbs_down';
+                    const result = await client.query(
+                        `UPDATE song_ratings
+                         SET ${oldColumn} = GREATEST(0, ${oldColumn} - 1), ${newColumn} = ${newColumn} + 1
+                         WHERE song_title = $1 AND song_artist = $2
+                         RETURNING thumbs_up, thumbs_down`,
+                        [title, artist]
+                    );
+                    thumbs_up = result.rows[0].thumbs_up;
+                    thumbs_down = result.rows[0].thumbs_down;
+                }
+            } else {
+                // New vote: record and update aggregate
+                await client.query(
+                    'INSERT INTO song_votes (song_title, song_artist, ip_address, vote) VALUES ($1, $2, $3, $4) ON CONFLICT (song_title, song_artist, ip_address) DO NOTHING',
+                    [title, artist, clientIp, rating]
                 );
 
-                // Update aggregate counts: decrement old, increment new
-                const oldColumn = oldVote === 'up' ? 'thumbs_up' : 'thumbs_down';
-                const newColumn = rating === 'up' ? 'thumbs_up' : 'thumbs_down';
-                const result = await pool.query(
-                    `UPDATE song_ratings
-                     SET ${oldColumn} = GREATEST(0, ${oldColumn} - 1), ${newColumn} = ${newColumn} + 1
-                     WHERE song_title = $1 AND song_artist = $2
+                const column = rating === 'up' ? 'thumbs_up' : 'thumbs_down';
+                const result = await client.query(
+                    `INSERT INTO song_ratings (song_title, song_artist, ${column})
+                     VALUES ($1, $2, 1)
+                     ON CONFLICT (song_title, song_artist)
+                     DO UPDATE SET ${column} = song_ratings.${column} + 1
                      RETURNING thumbs_up, thumbs_down`,
                     [title, artist]
                 );
-                return sendJson(res, 200, {
-                    thumbs_up: result.rows[0].thumbs_up,
-                    thumbs_down: result.rows[0].thumbs_down,
-                    user_vote: rating
-                });
+                thumbs_up = result.rows[0].thumbs_up;
+                thumbs_down = result.rows[0].thumbs_down;
             }
 
-            // New vote: record the vote
-            await pool.query(
-                'INSERT INTO song_votes (song_title, song_artist, ip_address, vote) VALUES ($1, $2, $3, $4)',
-                [title, artist, clientIp, rating]
-            );
-
-            // Update aggregate counts
-            const column = rating === 'up' ? 'thumbs_up' : 'thumbs_down';
-            const result = await pool.query(
-                `INSERT INTO song_ratings (song_title, song_artist, ${column})
-                 VALUES ($1, $2, 1)
-                 ON CONFLICT (song_title, song_artist)
-                 DO UPDATE SET ${column} = song_ratings.${column} + 1
-                 RETURNING thumbs_up, thumbs_down`,
-                [title, artist]
-            );
-            return sendJson(res, 200, {
-                thumbs_up: result.rows[0].thumbs_up,
-                thumbs_down: result.rows[0].thumbs_down,
-                user_vote: rating
-            });
+            await client.query('COMMIT');
+            return sendJson(res, 200, { thumbs_up, thumbs_down, user_vote: rating });
         } catch (err) {
+            if (client) {
+                try { await client.query('ROLLBACK'); } catch (e) { /* ignore rollback errors */ }
+            }
             console.error('DB error (POST /api/ratings):', err);
             return sendJson(res, 500, { error: 'Database error' });
+        } finally {
+            if (client) client.release();
         }
     }
 
     // API: POST /api/errors
     if (req.method === 'POST' && parsedUrl.pathname === '/api/errors') {
+        let body;
         try {
-            const body = JSON.parse(await readBody(req));
+            body = JSON.parse(await readBody(req));
+        } catch (err) {
+            if (err instanceof SyntaxError) {
+                return sendJson(res, 400, { error: 'Invalid JSON body' });
+            }
+            throw err;
+        }
+        try {
             const { session_id, source, severity, message, details, metadata } = body;
 
             if (!session_id || !source || !severity || !message) {

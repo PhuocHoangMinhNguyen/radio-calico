@@ -1,4 +1,4 @@
-import { Injectable, signal, ErrorHandler } from '@angular/core';
+import { Injectable, signal, ErrorHandler, inject } from '@angular/core';
 
 export type ErrorSeverity = 'info' | 'warning' | 'error' | 'fatal';
 export type ErrorSource = 'hls' | 'network' | 'media' | 'app' | 'unknown';
@@ -170,7 +170,7 @@ export class ErrorMonitoringService {
       totalErrors: errors.length,
       recoveryAttempts: attempts,
       successfulRecoveries: successes,
-      recoveryRate: attempts > 0 ? successes / attempts : 1,
+      recoveryRate: attempts > 0 ? successes / attempts : 0,
       errorsBySource,
       errorsBySeverity,
     };
@@ -240,7 +240,7 @@ export class ErrorMonitoringService {
  */
 @Injectable()
 export class GlobalErrorHandler implements ErrorHandler {
-  constructor(private errorMonitoring: ErrorMonitoringService) {}
+  private readonly errorMonitoring = inject(ErrorMonitoringService);
 
   handleError(error: Error): void {
     this.errorMonitoring.trackError(

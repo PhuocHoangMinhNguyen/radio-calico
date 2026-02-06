@@ -32,3 +32,20 @@ CREATE TABLE IF NOT EXISTS error_logs (
 CREATE INDEX IF NOT EXISTS idx_error_logs_created_at ON error_logs(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_error_logs_session_id ON error_logs(session_id);
 CREATE INDEX IF NOT EXISTS idx_error_logs_severity ON error_logs(severity);
+CREATE INDEX IF NOT EXISTS idx_error_logs_session_created ON error_logs(session_id, created_at DESC);
+
+-- Retention policy: automatically delete error_logs older than 30 days
+CREATE OR REPLACE FUNCTION cleanup_old_error_logs()
+RETURNS TRIGGER AS $$
+BEGIN
+  DELETE FROM error_logs
+  WHERE created_at < NOW() - INTERVAL '30 days';
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trigger_cleanup_error_logs ON error_logs;
+CREATE TRIGGER trigger_cleanup_error_logs
+  AFTER INSERT ON error_logs
+  FOR EACH STATEMENT
+  EXECUTE FUNCTION cleanup_old_error_logs();

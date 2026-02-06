@@ -28,20 +28,5 @@
       "purpose": "maskable"
     }
   ],
-  "categories": ["music", "entertainment"],
-  "shortcuts": [
-    {
-      "name": "Play Radio",
-      "short_name": "Play",
-      "description": "Start playing Radio Calico",
-      "url": "/?action=play",
-      "icons": [
-        {
-          "src": "icons/icon-192.svg",
-          "sizes": "192x192",
-          "type": "image/svg+xml"
-        }
-      ]
-    }
-  ]
+  "categories": ["music", "entertainment"]
 }

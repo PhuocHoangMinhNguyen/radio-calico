@@ -83,7 +83,8 @@
   }
 
   &:focus-visible {
-    outline: none;
+    outline: var(--focus-ring);
+    outline-offset: -2px;
     background: var(--background-highlight);
   }
 
@@ -105,4 +106,10 @@
 
 .cancel-item {
   color: var(--text-secondary);
+}
+
+.menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 99;
 }

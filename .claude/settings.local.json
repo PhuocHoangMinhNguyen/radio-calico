@@ -20,7 +20,14 @@
       "Bash(dir:*)",
       "Bash(findstr:*)",
       "Bash(npx ng test:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(npm run test:api:*)",
+      "Bash(node -c:*)",
+      "Bash(node -e:*)",
+      "Bash(git stash:*)",
+      "Bash(curl:*)",
+      "Bash(magick:*)",
+      "Bash(convert:*)"
     ]
   }
 }

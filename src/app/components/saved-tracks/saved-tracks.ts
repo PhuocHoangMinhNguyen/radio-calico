@@ -3,7 +3,6 @@ import { BookmarkService } from '../../services/bookmark.service';
 
 @Component({
   selector: 'app-saved-tracks',
-  standalone: true,
   templateUrl: './saved-tracks.html',
   styleUrl: './saved-tracks.scss',
 })

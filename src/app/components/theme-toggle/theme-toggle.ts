@@ -3,7 +3,6 @@ import { ThemeService } from '../../services/theme.service';
 
 @Component({
   selector: 'app-theme-toggle',
-  standalone: true,
   templateUrl: './theme-toggle.html',
   styleUrl: './theme-toggle.scss',
 })

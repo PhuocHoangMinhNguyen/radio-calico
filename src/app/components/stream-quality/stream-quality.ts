@@ -3,7 +3,6 @@ import { HlsPlayerService, ConnectionQuality } from '../../services/hls-player.s
 
 @Component({
   selector: 'app-stream-quality',
-  standalone: true,
   templateUrl: './stream-quality.html',
   styleUrl: './stream-quality.scss',
 })

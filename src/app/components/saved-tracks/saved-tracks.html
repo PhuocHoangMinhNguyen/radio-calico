@@ -16,7 +16,7 @@
 
     @if (isExpanded()) {
       <div id="saved-tracks-list" class="tracks-list" role="list">
-        @for (track of bookmarks(); track $index) {
+        @for (track of bookmarks(); track track.savedAt) {
           <div class="track-item" role="listitem">
             <div class="track-info">
               <span class="track-title">{{ track.title }}</span>
@@ -33,7 +33,12 @@
           </div>
         }
 
-        <button class="clear-all-btn" type="button" (click)="clearAll()">
+        <button
+          class="clear-all-btn"
+          type="button"
+          (click)="clearAll()"
+          aria-label="Clear all saved tracks"
+        >
           <span class="material-icons" aria-hidden="true">delete_sweep</span>
           <span>Clear all</span>
         </button>

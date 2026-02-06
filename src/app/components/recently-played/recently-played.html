@@ -2,7 +2,7 @@
   <section class="recently-played-section">
     <h2 class="section-title">Recently Played</h2>
     <div class="tracks-grid">
-      @for (track of recentlyPlayed(); track $index) {
+      @for (track of recentlyPlayed(); track track.title + '::' + track.artist) {
         <div class="track-card">
           @if (track.coverUrl) {
             <img

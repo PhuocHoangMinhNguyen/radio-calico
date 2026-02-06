@@ -39,10 +39,10 @@ export class MetaService {
       }
 
       // Twitter
-      this.meta.updateTag({ property: 'twitter:title', content: trackTitle });
-      this.meta.updateTag({ property: 'twitter:description', content: trackDescription });
+      this.meta.updateTag({ name: 'twitter:title', content: trackTitle });
+      this.meta.updateTag({ name: 'twitter:description', content: trackDescription });
       if (coverUrl) {
-        this.meta.updateTag({ property: 'twitter:image', content: coverUrl });
+        this.meta.updateTag({ name: 'twitter:image', content: coverUrl });
       }
 
       // Standard meta
@@ -63,9 +63,9 @@ export class MetaService {
     this.meta.updateTag({ property: 'og:title', content: DEFAULT_TITLE });
     this.meta.updateTag({ property: 'og:description', content: DEFAULT_DESCRIPTION });
     this.meta.updateTag({ property: 'og:image', content: DEFAULT_IMAGE });
-    this.meta.updateTag({ property: 'twitter:title', content: DEFAULT_TITLE });
-    this.meta.updateTag({ property: 'twitter:description', content: DEFAULT_DESCRIPTION });
-    this.meta.updateTag({ property: 'twitter:image', content: DEFAULT_IMAGE });
+    this.meta.updateTag({ name: 'twitter:title', content: DEFAULT_TITLE });
+    this.meta.updateTag({ name: 'twitter:description', content: DEFAULT_DESCRIPTION });
+    this.meta.updateTag({ name: 'twitter:image', content: DEFAULT_IMAGE });
     this.meta.updateTag({ name: 'description', content: DEFAULT_DESCRIPTION });
     this.updateJsonLd(null, null);
   }

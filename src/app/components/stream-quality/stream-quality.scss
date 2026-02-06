@@ -15,21 +15,21 @@
   &.quality-good {
     .quality-icon,
     .quality-label {
-      color: #4caf50;
+      color: var(--quality-good);
     }
   }
 
   &.quality-fair {
     .quality-icon,
     .quality-label {
-      color: #ff9800;
+      color: var(--quality-fair);
     }
   }
 
   &.quality-poor {
     .quality-icon,
     .quality-label {
-      color: #f44336;
+      color: var(--quality-poor);
     }
   }
 }

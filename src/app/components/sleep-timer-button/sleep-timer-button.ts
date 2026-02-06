@@ -7,7 +7,6 @@ import {
 
 @Component({
   selector: 'app-sleep-timer-button',
-  standalone: true,
   templateUrl: './sleep-timer-button.html',
   styleUrl: './sleep-timer-button.scss',
 })

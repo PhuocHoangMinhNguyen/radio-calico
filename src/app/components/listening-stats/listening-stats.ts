@@ -3,7 +3,6 @@ import { StatsService } from '../../services/stats.service';
 
 @Component({
   selector: 'app-listening-stats',
-  standalone: true,
   templateUrl: './listening-stats.html',
   styleUrl: './listening-stats.scss',
 })
