@@ -294,24 +294,20 @@ Radio Calico includes comprehensive security scanning using `npm audit`:
 ### Quick Commands
 ```bash
 # Run security checks
-npm run security           # All dependencies + production only
-make security              # Using Makefile
+npm audit                           # Check all dependencies
+npm audit --omit=dev                # Production dependencies only
 
-# Fix vulnerabilities
-npm run audit:fix
-make audit-fix
-
-# Generate detailed report
-make audit-report
+# Fix vulnerabilities automatically
+npm audit fix                       # Fix all fixable vulnerabilities
 ```
 
 ### Automated Security Scanning
 - **Every push/PR**: Security job runs npm audit (fails on critical vulnerabilities)
-- **Weekly scans**: Every Monday at 9:00 AM UTC
+- **Weekly scans**: Every Monday at 9:00 AM UTC via `.github/workflows/security-scan.yml`
 - **Automatic alerts**: GitHub issues created for critical/high severity vulnerabilities
-- **Security reports**: Uploaded as artifacts with 30-90 day retention
+- **Security reports**: Uploaded as artifacts with 90-day retention
 
-See [SECURITY.md](SECURITY.md) for complete documentation, severity levels, and vulnerability response procedures.
+The workflow uses `npm audit --audit-level=moderate` for scanning and `npm audit --audit-level=critical` as a gate for critical vulnerabilities.
 
 ## CI/CD
 

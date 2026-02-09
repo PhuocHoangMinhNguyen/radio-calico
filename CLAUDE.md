@@ -271,6 +271,7 @@ GitHub Actions workflow (`.github/workflows/docker-build.yml`) runs on push/PR t
 **Other workflows:**
 - `.github/workflows/claude.yml` — Claude Code integration for `@claude` mentions in issues/PRs
 - `.github/workflows/claude-code-review.yml` — Automatic code review on PR creation
+- `.github/workflows/security-scan.yml` — Automated security scanning with Trivy and npm audit
 
 **Important CI/CD notes:**
 - Node.js version in CI **must** be ≥22.12 or ≥20.19 to satisfy Angular 21 requirements
