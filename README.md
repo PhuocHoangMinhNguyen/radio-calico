@@ -33,8 +33,11 @@ A lossless internet radio player built with Angular 21 and HLS.js. Streams high-
 
 ### DevOps
 - **Docker** — Multi-stage builds with Alpine Linux
-- **GitHub Actions** — CI/CD with automated testing and Docker image publishing
+- **nginx** — Production reverse proxy with security headers and caching
+- **GitHub Actions** — CI/CD with automated testing, security scanning, and Docker image publishing
+- **npm audit** — Automated vulnerability scanning with weekly scheduled scans
 - **GitHub Container Registry** — Docker image hosting
+- **Makefile + PowerShell** — Cross-platform management scripts
 
 ## Prerequisites
 
@@ -73,14 +76,19 @@ The development container includes hot-reload for both Angular and Node.js code.
 
 #### Production Mode
 ```bash
-# Build and start production containers
+# Build and start production containers (nginx + backend + db)
 docker-compose -f docker-compose.prod.yml up -d
 
+# Or using convenience commands
+make prod                    # Linux/macOS/WSL/Git Bash
+.\radio-calico.ps1 prod      # Windows PowerShell
+
 # View logs
-docker-compose -f docker-compose.prod.yml logs -f app
+docker-compose -f docker-compose.prod.yml logs -f
+make logs                    # Or use Makefile
 ```
 
-Access: http://localhost:3000 (single server serves both static files and API)
+Access: http://localhost:8080 (nginx serves static files, proxies `/api/*` to backend)
 
 ### Local Development (Without Docker)
 
@@ -133,6 +141,30 @@ npm run start:api
 
 ## Available Commands
 
+### Management Scripts (Recommended)
+
+**Cross-platform scripts for easier workflow:**
+
+```bash
+# Linux/macOS/WSL/Git Bash
+make help           # Show all available targets
+make prod           # Start production (port 8080)
+make dev            # Start development servers
+make test           # Run all tests
+make status         # Show container status
+make logs           # View container logs
+
+# Windows PowerShell
+.\radio-calico.ps1 help         # Show all commands
+.\radio-calico.ps1 prod         # Start production (port 8080)
+.\radio-calico.ps1 dev          # Start development
+.\radio-calico.ps1 test         # Run all tests
+.\radio-calico.ps1 status       # Show container status
+.\radio-calico.ps1 logs         # View logs
+```
+
+See `make help` or `.\radio-calico.ps1 help` for the full command list.
+
 ### Development
 - `npm run dev` — **Primary workflow**: Concurrent Angular dev server (port 3000) + API server (port 3001)
 - `npm start` — Angular dev server only (port 3000, proxies `/api/*` to port 3001)
@@ -179,14 +211,20 @@ radio-calico/
 ├── db/
 │   └── init.sql                # PostgreSQL schema
 ├── Dockerfile                  # Multi-stage Docker build
+├── Dockerfile.nginx            # nginx frontend web server (production only)
+├── nginx.conf                  # nginx configuration (reverse proxy, caching, security headers)
 ├── docker-compose.yml          # Development environment
-├── docker-compose.prod.yml     # Production environment
+├── docker-compose.prod.yml     # Production environment (nginx + backend + db)
+├── Makefile                    # Cross-platform management scripts
+├── radio-calico.ps1            # PowerShell management script (Windows)
 ├── .github/
 │   └── workflows/
-│       ├── docker-build.yml    # CI/CD pipeline
+│       ├── docker-build.yml    # CI/CD pipeline with security scanning
+│       ├── security-scan.yml   # Scheduled weekly vulnerability scanning
 │       ├── claude.yml          # Claude Code integration
 │       └── claude-code-review.yml
-└── CLAUDE.md                   # Claude Code guidance
+├── CLAUDE.md                   # Claude Code guidance
+└── SECURITY.md                 # Security documentation and vulnerability response
 
 ```
 
@@ -207,14 +245,30 @@ All components are standalone (no NgModules). State is managed via Angular Signa
 ### Backend — Node.js + PostgreSQL
 `server.js` is a plain `http.createServer` server (not Express):
 1. **API endpoints**: `GET /api/ratings`, `POST /api/ratings`, `POST /api/errors`
-2. **Static file serving**: from `dist/radio-calico/browser/`
-3. **SPA fallback**: any unmatched route serves `index.html`
+2. **Static file serving** (when `API_ONLY` is not set): from `dist/radio-calico/browser/`
+3. **SPA fallback** (when `API_ONLY` is not set): any unmatched route serves `index.html`
 
 **Database**: Three tables (`song_ratings`, `song_votes`, `error_logs`) managed via `pg` Pool.
 
-**Dual-mode operation**:
-- **Dev**: API only on port 3001 (Angular dev server handles static files)
-- **Prod**: Everything on port 3000 (single server)
+**Server modes**:
+- **Dev**: API only on port 3001 (Angular dev server handles static files on port 3000)
+- **Prod with Docker**: nginx on port 80 serves static files, Node backend on internal port 3001 (API only, `API_ONLY=true`)
+- **Prod without Docker**: Single Node server on port 3000 (serves both static files and API)
+
+### Production Architecture (Docker)
+```
+Client → nginx:80 → backend:3001 (Node.js API)
+         ↓
+    Static files from /usr/share/nginx/html
+```
+
+**nginx features**:
+- Serves pre-built Angular static files
+- Reverse proxies `/api/*` requests to backend
+- Security headers (X-Content-Type-Options, X-Frame-Options, X-XSS-Protection, Referrer-Policy)
+- Optimized caching (1 year for assets, no-cache for index.html)
+- gzip compression for all text-based content
+- Health check endpoint (`/health`)
 
 ## Testing
 
@@ -233,17 +287,61 @@ docker-compose run --rm app npm run test:api
 docker-compose run --rm app npm run test:headless
 ```
 
+## Security
+
+Radio Calico includes comprehensive security scanning using `npm audit`:
+
+### Quick Commands
+```bash
+# Run security checks
+npm run security           # All dependencies + production only
+make security              # Using Makefile
+
+# Fix vulnerabilities
+npm run audit:fix
+make audit-fix
+
+# Generate detailed report
+make audit-report
+```
+
+### Automated Security Scanning
+- **Every push/PR**: Security job runs npm audit (fails on critical vulnerabilities)
+- **Weekly scans**: Every Monday at 9:00 AM UTC
+- **Automatic alerts**: GitHub issues created for critical/high severity vulnerabilities
+- **Security reports**: Uploaded as artifacts with 30-90 day retention
+
+See [SECURITY.md](SECURITY.md) for complete documentation, severity levels, and vulnerability response procedures.
+
 ## CI/CD
 
-GitHub Actions workflow (`.github/workflows/docker-build.yml`) runs on push/PR:
-1. **Build Stage**: Multi-stage Docker builds (development + production)
-2. **Test Stage**:
+GitHub Actions workflows run on push/PR:
+
+### Build & Test (`.github/workflows/docker-build.yml`)
+1. **Build Job**: Multi-stage Docker builds (development + production)
+2. **Security Job** (runs in parallel):
+   - npm audit on all dependencies and production-only
+   - Generates JSON security report
+   - Uploads artifact (30-day retention)
+   - **Fails build on critical vulnerabilities**
+3. **Test Job**:
    - Spins up PostgreSQL service
    - Runs backend tests (`npm run test:api`)
    - Runs frontend tests (`npm run test:headless`)
-3. **Publish Stage**: Pushes images to GitHub Container Registry
+4. **Publish**: Pushes images to GitHub Container Registry
+
+### Security Scanning (`.github/workflows/security-scan.yml`)
+- **Scheduled**: Every Monday at 9:00 AM UTC
+- **Trigger**: Changes to `package.json` or `package-lock.json`
+- **Actions**:
+  - Comprehensive vulnerability scanning
+  - Uploads detailed reports (90-day retention)
+  - **Automatically creates GitHub issues** for critical/high vulnerabilities
+  - Includes quick fix commands in issue description
 
 Docker images: `ghcr.io/phuochoangminhnguyen/radio-calico:latest`
+
+See [SECURITY.md](SECURITY.md) for vulnerability response procedures.
 
 ## Environment Variables
 
