@@ -14,6 +14,7 @@ process.on('unhandledRejection', (err) => {
 
 const DIST_DIR = path.join(__dirname, 'dist', 'radio-calico', 'browser');
 const isProduction = fs.existsSync(path.join(DIST_DIR, 'index.html'));
+const apiOnly = process.env.API_ONLY === 'true';
 const PORT = process.env.PORT || (isProduction ? 3000 : 3001);
 
 const pool = new Pool({
@@ -260,6 +261,13 @@ const server = http.createServer(async (req, res) => {
         }
     }
 
+    // API-only mode: return 404 for non-API routes (nginx handles static files)
+    if (apiOnly) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Not found - API only mode' }));
+        return;
+    }
+
     // Static files / SPA fallback
     let filePath = path.join(DIST_DIR, parsedUrl.pathname === '/' ? 'index.html' : parsedUrl.pathname);
 
@@ -293,7 +301,7 @@ const server = http.createServer(async (req, res) => {
 if (require.main === module) {
     server.listen(PORT, () => {
         console.log(`\n🎵 Radio Calico Server Running!`);
-        console.log(`   Mode:    ${isProduction ? 'Production' : 'API Only (dev)'}`);
+        console.log(`   Mode:    ${apiOnly ? 'API Only (nginx backend)' : isProduction ? 'Production' : 'API Only (dev)'}`);
         console.log(`   Local:   http://localhost:${PORT}`);
         console.log(`\n   Press Ctrl+C to stop\n`);
     });
