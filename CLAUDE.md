@@ -304,3 +304,321 @@ Implemented in `KeyboardShortcutService`, registered in `App` component.
   - **Bundle budgets** (configured in `angular.json`):
     - Initial bundle: 500 kB warning threshold, 1 MB error threshold
     - Component styles: 4 kB warning, 8 kB error
+
+## Security Roadmap
+
+### Current Security Posture
+
+**✅ Implemented:**
+- npm audit integration with automated weekly scans
+- Security job in CI/CD (fails on critical vulnerabilities)
+- nginx security headers (X-Content-Type-Options, X-Frame-Options, X-XSS-Protection, Referrer-Policy, X-DNS-Prefetch-Control)
+- Non-root user in Docker containers
+- Resource limits on all services
+- Parameterized database queries (prevents SQL injection)
+- Angular's built-in XSS protection
+- Input validation on API endpoints
+- **GitHub CodeQL analysis** (`.github/workflows/codeql.yml`) - SAST scanning for TypeScript/JavaScript vulnerabilities
+- **Trivy container scanning** (integrated in `docker-build.yml`) - Scans Docker images for CVEs, uploads to GitHub Security
+- **API rate limiting** (`server.js`) - 100 requests per IP per minute with configurable limits and X-RateLimit headers
+- **HTTPS/TLS configuration** (`nginx.conf`) - Ready-to-enable SSL/TLS with modern cipher suites, HSTS, and OCSP stapling
+- **Content Security Policy** (`nginx.conf`) - Comprehensive CSP headers restricting resource loading to trusted domains
+- **Request validation & size limits** (`server.js`) - JSON schema validation, content-type validation, configurable size limits per endpoint
+- **Permissions-Policy headers** (`nginx.conf`) - Restricts browser features (camera, microphone, geolocation, etc.)
+- **Dependabot automation** (`.github/dependabot.yml`) - Automated npm, Docker, and GitHub Actions dependency updates
+- **Secret scanning guide** (`docs/SECRET_SCANNING_SETUP.md`) - Comprehensive guide for enabling GitHub secret scanning
+- **Security testing guide** (`docs/SECURITY_TESTING_GUIDE.md`) - OWASP Top 10 testing procedures and penetration testing checklist
+- **Security event logging** (`server.js`) - Automated logging of rate limit violations, validation failures, and suspicious patterns
+- **Penetration testing guide** (`docs/PENETRATION_TESTING_GUIDE.md`) - Comprehensive guide for planning and executing professional security audits
+- **SIEM integration guide** (`docs/SIEM_INTEGRATION_GUIDE.md`) - Integration instructions for Elastic Stack, Splunk, Datadog, and AWS Security Hub
+- **Incident response plan** (`docs/INCIDENT_RESPONSE.md`) - Complete incident response procedures with templates and checklists
+- **WAF deployment guide** (`docs/WAF_DEPLOYMENT_GUIDE.md`) - Instructions for deploying Cloudflare, AWS WAF, or ModSecurity
+
+**⚠️ Current Limitations:**
+- HTTPS/TLS configuration requires SSL certificates to be provisioned (see nginx.conf comments for setup)
+- Professional penetration testing requires budget allocation and vendor selection (guide provided)
+- Secret scanning requires manual enablement in GitHub repository settings (guide provided)
+- SIEM integration requires infrastructure setup and configuration (guide provided)
+- WAF deployment requires service selection and configuration (guide provided)
+
+### Future Enhancements
+
+All items from the original security roadmap have been implemented. Future security improvements should be identified through:
+- Professional penetration testing results
+- Security incident learnings
+- Emerging threat landscape
+- Compliance requirements
+- Technology stack evolution
+
+### Implementation Notes
+
+- Prioritize items based on risk assessment and available resources
+- Test all security enhancements in development before production deployment
+- Document all security configurations in `SECURITY.md`
+- Review and update this roadmap quarterly
+- Consider security implications for all new features and changes
+
+### Security Feature Configuration
+
+#### API Rate Limiting
+
+Rate limiting is automatically enabled for all `/api/*` endpoints in `server.js`. Configuration:
+
+**Default settings:**
+- **Window:** 60 seconds (1 minute)
+- **Max requests:** 100 per IP per window
+- **Headers returned:** `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`, `Retry-After` (on 429)
+
+**To customize:**
+Edit constants in `server.js`:
+```javascript
+const RATE_LIMIT_WINDOW_MS = 60 * 1000;    // Change window duration
+const RATE_LIMIT_MAX_REQUESTS = 100;       // Change max requests
+```
+
+**Testing rate limits:**
+```bash
+# Send 101 requests in rapid succession
+for i in {1..101}; do curl http://localhost:3001/api/ratings?title=test&artist=test; done
+```
+
+#### HTTPS/TLS Setup
+
+HTTPS configuration is pre-configured in `nginx.conf` but requires SSL certificates. To enable:
+
+**Using Let's Encrypt (recommended):**
+```bash
+# 1. Install certbot
+apt-get install certbot python3-certbot-nginx
+
+# 2. Obtain certificate (replace with your domain)
+certbot --nginx -d yourdomain.com
+
+# 3. Update nginx.conf:
+#    - Uncomment the HTTPS server block (lines ~53-95)
+#    - Uncomment the HTTP redirect block (lines ~50-56)
+#    - Comment out the HTTP-only server block (lines ~98+)
+
+# 4. Restart nginx
+docker-compose -f docker-compose.prod.yml restart nginx
+```
+
+**Using custom certificates:**
+1. Place your certificate files in a mounted volume
+2. Update `ssl_certificate` and `ssl_certificate_key` paths in nginx.conf
+3. Uncomment the HTTPS server block and HTTP redirect
+4. Restart nginx
+
+**Testing HTTPS:**
+```bash
+curl -I https://yourdomain.com/health
+# Should return 200 OK with Strict-Transport-Security header
+```
+
+#### CodeQL Security Scanning
+
+CodeQL runs automatically on:
+- Every push to `master` branch
+- Every pull request
+- Weekly schedule (Mondays at 10:00 AM UTC)
+- Manual trigger via GitHub Actions UI
+
+**View results:**
+- GitHub Security tab → Code scanning alerts
+- Workflow artifacts: Download SARIF files from Actions runs
+
+**To run locally (requires CodeQL CLI):**
+```bash
+codeql database create codeql-db --language=javascript
+codeql database analyze codeql-db --format=sarif-latest --output=results.sarif
+```
+
+#### Trivy Container Scanning
+
+Trivy scans run automatically on Docker builds and upload results to GitHub Security.
+
+**Manual scan:**
+```bash
+# Scan local image
+docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+  aquasec/trivy image radio-calico:latest
+
+# Scan with severity filter
+docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+  aquasec/trivy image --severity CRITICAL,HIGH radio-calico:latest
+```
+
+**View results:**
+- GitHub Security tab → Vulnerability alerts
+- Workflow artifacts: Download JSON reports from Actions runs
+
+#### Content Security Policy
+
+CSP headers are automatically applied to all responses from nginx. The policy:
+- Allows resources only from `self` and whitelisted domains
+- Permits inline scripts/styles (required for Angular)
+- Restricts media/images to CloudFront CDN
+- Enforces HTTPS upgrade for all requests
+
+**Testing CSP:**
+```bash
+curl -I http://localhost:8080/
+# Should include Content-Security-Policy header
+```
+
+**Monitoring CSP violations:**
+Add a `report-uri` directive to the CSP header in nginx.conf to log violations:
+```nginx
+add_header Content-Security-Policy "... report-uri /api/csp-report;" always;
+```
+
+#### Request Validation & Size Limits
+
+Request validation and size limits are automatically enforced on all API endpoints.
+
+**Configuration (`server.js`):**
+```javascript
+const MAX_REQUEST_SIZE = 1024 * 1024;  // 1 MB general limit
+const MAX_ERROR_LOG_SIZE = 10 * 1024;  // 10 KB for error logs
+const MAX_RATING_SIZE = 1024;           // 1 KB for ratings
+```
+
+**Enforced validations:**
+- Content-Type header validation (must be `application/json`)
+- Request size limits per endpoint
+- Required field validation
+- Field type validation (string, number, etc.)
+- Field length limits (e.g., title/artist max 200 chars)
+- Suspicious pattern detection (SQL injection, XSS attempts)
+
+**Testing:**
+```bash
+# Test size limit
+dd if=/dev/zero bs=2M count=1 | curl -X POST http://localhost:3001/api/ratings \
+  -H "Content-Type: application/json" --data-binary @-
+# Should return 413 Payload Too Large
+
+# Test content-type validation
+curl -X POST http://localhost:3001/api/ratings \
+  -H "Content-Type: text/plain" -d '{"title":"test","artist":"test","rating":"up"}'
+# Should return 400 with content-type error
+```
+
+#### Security Event Logging
+
+All security events are automatically logged to console and the `error_logs` database table.
+
+**Logged events:**
+- `rate_limit_exceeded` - When IP exceeds rate limit
+- `invalid_content_type` - Wrong Content-Type header
+- `request_too_large` - Request exceeds size limit
+- `validation_failed` - Input validation failure
+- `sql_injection_attempt` - Detected SQL injection pattern
+- `xss_attempt` - Detected XSS pattern
+
+**Viewing security logs:**
+```bash
+# View console logs
+docker-compose -f docker-compose.prod.yml logs backend | grep "SECURITY EVENT"
+
+# Query database
+psql -U postgres -d radio_calico -c \
+  "SELECT * FROM error_logs WHERE source='app' AND severity='warning' ORDER BY created_at DESC LIMIT 20;"
+```
+
+**Log format:**
+```json
+{
+  "timestamp": "2024-01-15T10:30:00.000Z",
+  "event_type": "rate_limit_exceeded",
+  "client_ip": "192.168.1.100",
+  "method": "POST",
+  "path": "/api/ratings",
+  "user_agent": "curl/7.64.1",
+  "request_count": 101,
+  "limit": 100
+}
+```
+
+#### Dependabot Automated Updates
+
+Dependabot is configured to automatically create PRs for dependency updates.
+
+**Configuration (`.github/dependabot.yml`):**
+- npm dependencies: Weekly on Mondays at 9:00 UTC
+- Docker images: Weekly on Mondays at 10:00 UTC
+- GitHub Actions: Weekly on Mondays at 11:00 UTC
+
+**Managing Dependabot PRs:**
+```bash
+# List Dependabot PRs
+gh pr list --label dependencies
+
+# Merge a Dependabot PR (after review)
+gh pr merge <PR_NUMBER> --squash
+
+# Close and ignore a specific version
+gh pr close <PR_NUMBER>
+# Then add to dependabot.yml ignore list
+```
+
+**Customizing Dependabot:**
+Edit `.github/dependabot.yml` to:
+- Change update schedule
+- Add reviewers/assignees
+- Ignore specific dependencies
+- Group related updates
+
+#### Secret Scanning
+
+See `docs/SECRET_SCANNING_SETUP.md` for detailed setup instructions.
+
+**Quick setup:**
+1. Go to repository Settings → Code security and analysis
+2. Enable "Secret scanning"
+3. Enable "Push protection"
+4. Configure custom patterns (optional)
+
+**Local pre-commit scanning:**
+```bash
+# Install gitleaks
+brew install gitleaks  # macOS
+# or download from https://github.com/gitleaks/gitleaks/releases
+
+# Scan before commit
+gitleaks protect --staged
+```
+
+#### Security Testing
+
+See `docs/SECURITY_TESTING_GUIDE.md` for comprehensive testing procedures.
+
+**Quick OWASP Top 10 tests:**
+```bash
+# SQL Injection test
+curl "http://localhost:3001/api/ratings?title=test'%20OR%201=1--&artist=test"
+
+# Rate limiting test
+for i in {1..105}; do curl http://localhost:3001/api/ratings?title=test&artist=test; done
+
+# Size limit test
+dd if=/dev/zero bs=2M count=1 | curl -X POST http://localhost:3001/api/ratings \
+  -H "Content-Type: application/json" --data-binary @-
+```
+
+**Automated scanning with OWASP ZAP:**
+```bash
+# Start ZAP daemon
+zap.sh -daemon -port 8090 -config api.disablekey=true
+
+# Run baseline scan
+zap-baseline.py -t http://localhost:8080 -r zap-report.html
+```
+
+### Resources
+
+- [OWASP Top 10](https://owasp.org/www-project-top-ten/)
+- [GitHub CodeQL Documentation](https://docs.github.com/en/code-security/code-scanning)
+- [Trivy Container Scanner](https://github.com/aquasecurity/trivy)
+- [NIST Cybersecurity Framework](https://www.nist.gov/cyberframework)
+- [npm Security Best Practices](https://docs.npmjs.com/security-best-practices)

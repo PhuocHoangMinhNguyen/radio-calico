@@ -1,0 +1,78 @@
+# Dependabot configuration for automated dependency updates
+# https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+
+version: 2
+updates:
+  # Enable npm dependency updates for the main project
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "UTC"
+    # Group all minor and patch updates together
+    groups:
+      angular:
+        patterns:
+          - "@angular/*"
+      development:
+        dependency-type: "development"
+        update-types:
+          - "minor"
+          - "patch"
+    # Limit number of open PRs to avoid noise
+    open-pull-requests-limit: 10
+    # Allow automatic rebasing
+    rebase-strategy: "auto"
+    # Add labels to PRs
+    labels:
+      - "dependencies"
+      - "automated"
+    # Commit message prefix
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(dev-deps)"
+      include: "scope"
+    # Ignore specific dependencies (add as needed)
+    ignore:
+      # Ignore Vitest major updates (pinned to 3.x for backend)
+      - dependency-name: "vitest"
+        update-types: ["version-update:semver-major"]
+    # Reviewers (update with your GitHub username)
+    # reviewers:
+    #   - "yourusername"
+    # assignees:
+    #   - "yourusername"
+
+  # Enable Docker dependency updates for base images
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "10:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "docker"
+      - "automated"
+    commit-message:
+      prefix: "chore(docker)"
+
+  # Enable GitHub Actions workflow updates
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "11:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "github-actions"
+      - "automated"
+    commit-message:
+      prefix: "chore(ci)"

@@ -110,20 +110,20 @@ jobs:
             ### Action Required
 
             1. Review the [security audit report](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
-            2. Run \`make audit-fix\` to automatically fix vulnerabilities where possible
+            2. Run \`npm audit fix\` to automatically fix vulnerabilities where possible
             3. Manually update dependencies that cannot be auto-fixed
 
             ### Quick Commands
 
             \`\`\`bash
             # Review all vulnerabilities
-            make audit
+            npm audit
 
             # Attempt automatic fixes
-            make audit-fix
+            npm audit fix
 
             # Production dependencies only
-            make audit-prod
+            npm audit --omit=dev
             \`\`\`
 
             This issue was automatically created by the scheduled security scan.`,
