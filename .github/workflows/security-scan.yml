@@ -1,0 +1,139 @@
+# GitHub Actions workflow for scheduled security scanning
+# Runs npm audit on a schedule to detect new vulnerabilities
+
+name: Security Scan
+
+on:
+  schedule:
+    # Run every Monday at 9:00 AM UTC
+    - cron: '0 9 * * 1'
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+    paths:
+      - 'package.json'
+      - 'package-lock.json'
+
+jobs:
+  security-audit:
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+      security-events: write
+      issues: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Run npm audit (all dependencies)
+        id: audit-all
+        run: npm audit --audit-level=moderate
+        continue-on-error: true
+
+      - name: Run npm audit (production only)
+        id: audit-prod
+        run: npm audit --omit=dev --audit-level=moderate
+        continue-on-error: true
+
+      - name: Generate detailed security report
+        run: |
+          echo "# Security Audit Report - $(date)" > security-report.md
+          echo "" >> security-report.md
+          echo "## All Dependencies" >> security-report.md
+          npm audit || true
+          echo "" >> security-report.md
+          echo "## Production Dependencies Only" >> security-report.md
+          npm audit --omit=dev || true
+          npm audit --json > security-audit-report.json || true
+
+      - name: Upload security audit report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-audit-report-${{ github.run_number }}
+          path: |
+            security-audit-report.json
+            security-report.md
+          retention-days: 90
+
+      - name: Check for critical vulnerabilities
+        id: critical-check
+        run: |
+          if npm audit --audit-level=critical; then
+            echo "status=pass" >> $GITHUB_OUTPUT
+          else
+            echo "status=fail" >> $GITHUB_OUTPUT
+          fi
+        continue-on-error: true
+
+      - name: Create issue for critical vulnerabilities
+        if: steps.critical-check.outputs.status == 'fail' && github.event_name == 'schedule'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('security-audit-report.json', 'utf8');
+            const auditData = JSON.parse(report);
+
+            const criticalVulns = Object.values(auditData.vulnerabilities || {})
+              .filter(v => v.severity === 'critical')
+              .length;
+
+            const highVulns = Object.values(auditData.vulnerabilities || {})
+              .filter(v => v.severity === 'high')
+              .length;
+
+            if (criticalVulns > 0 || highVulns > 0) {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: `🚨 Security Alert: ${criticalVulns} critical, ${highVulns} high severity vulnerabilities detected`,
+                body: `## Security Vulnerability Report
+
+            Automated security scan detected vulnerabilities in dependencies:
+
+            - **Critical:** ${criticalVulns}
+            - **High:** ${highVulns}
+            - **Total vulnerabilities:** ${Object.keys(auditData.vulnerabilities || {}).length}
+
+            ### Action Required
+
+            1. Review the [security audit report](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            2. Run \`make audit-fix\` to automatically fix vulnerabilities where possible
+            3. Manually update dependencies that cannot be auto-fixed
+
+            ### Quick Commands
+
+            \`\`\`bash
+            # Review all vulnerabilities
+            make audit
+
+            # Attempt automatic fixes
+            make audit-fix
+
+            # Production dependencies only
+            make audit-prod
+            \`\`\`
+
+            This issue was automatically created by the scheduled security scan.`,
+                labels: ['security', 'dependencies']
+              });
+            }
+
+      - name: Fail on critical vulnerabilities
+        if: steps.critical-check.outputs.status == 'fail' && github.event_name != 'schedule'
+        run: |
+          echo "❌ Critical vulnerabilities detected!"
+          npm audit --audit-level=critical
+          exit 1
