@@ -78,7 +78,7 @@ jobs:
       - name: Run Trivy vulnerability scanner (production image)
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
+          image-ref: ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
           format: 'sarif'
           output: 'trivy-results-production.sarif'
           severity: 'CRITICAL,HIGH'
@@ -94,7 +94,7 @@ jobs:
       - name: Run Trivy vulnerability scanner (JSON output)
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
+          image-ref: ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
           format: 'json'
           output: 'trivy-results-production.json'
           severity: 'CRITICAL,HIGH,MEDIUM'
