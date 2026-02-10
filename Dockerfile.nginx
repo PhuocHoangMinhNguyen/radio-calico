@@ -19,7 +19,7 @@ COPY . .
 RUN npm run build:prod
 
 # Stage 3: nginx production server
-FROM nginx:1.27-alpine
+FROM nginx:1.29-alpine
 
 LABEL maintainer="Radio Calico"
 LABEL description="Radio Calico nginx frontend - serves Angular SPA and proxies API"
