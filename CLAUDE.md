@@ -2,14 +2,70 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Table of Contents
+- [Project Overview](#project-overview)
+- [Quick Start](#quick-start)
+- [Commands](#commands)
+- [Architecture](#architecture)
+- [Progressive Web App (PWA)](#progressive-web-app-pwa)
+- [nginx Configuration](#nginx-configuration-production-docker-only)
+- [localStorage Keys](#localstorage-keys)
+- [Testing](#testing)
+- [Docker Setup](#docker-setup)
+- [CI/CD](#cicd)
+- [Conventions](#conventions)
+- [Keyboard Shortcuts](#keyboard-shortcuts)
+- [Browser Support](#browser-support)
+- [Blocked / Known Limitations](#blocked--known-limitations)
+- [Code Quality & Improvements Roadmap](#code-quality--improvements-roadmap)
+- [Security Roadmap](#security-roadmap)
+
 ## Project Overview
 
 Radio Calico is a lossless internet radio player built with Angular 21 and HLS.js. It streams audio from a CloudFront-hosted HLS endpoint (`https://d3d4yli4hf5bmh.cloudfront.net/hls/live.m3u8`) at 48kHz/24-bit quality. There is a backend Node.js server (`server.js`) backed by PostgreSQL for ratings and error logging.
+
+**Key Features:**
+- 🎵 Lossless HLS streaming (48kHz/24-bit)
+- 📊 Track ratings with PostgreSQL backend and IP-based deduplication
+- 🔖 Bookmarks (max 50 tracks, localStorage)
+- 📈 Listening statistics tracking
+- 🎨 Light/dark theme with system preference support
+- ⌨️ Global keyboard shortcuts (Space, ↑/↓, M, L)
+- 🔔 Browser notifications for track changes
+- ♿ Full accessibility support (ARIA, screen readers, keyboard navigation)
+- 📱 Progressive Web App with offline support
+- 🐳 Production-ready Docker setup with nginx reverse proxy
 
 **Prerequisites:**
 - **Node.js** ≥22.12 or ≥20.19 (Node 22 recommended)
 - **PostgreSQL** 16+ (or use Docker Compose)
 - **Docker** (optional, recommended for development)
+
+## Quick Start
+
+**For Docker users (recommended):**
+```bash
+# Development
+docker-compose up
+
+# Production
+docker-compose -f docker-compose.prod.yml up
+# Or: make prod (Linux/macOS/WSL) or .\radio-calico.ps1 prod (Windows)
+```
+
+**For local development:**
+```bash
+npm ci --legacy-peer-deps
+npm run dev  # Runs Angular dev server (3000) + API server (3001)
+```
+
+**Database setup** (local only):
+```bash
+createdb radio_calico
+PGPASSWORD=your_password psql -U postgres -d radio_calico -f db/init.sql
+```
+
+See [Commands](#commands) section below for full details.
 
 ## Commands
 
@@ -297,6 +353,14 @@ Global keyboard shortcuts (disabled when typing in input fields):
 
 Implemented in `KeyboardShortcutService`, registered in `App` component.
 
+## Browser Support
+
+Requires browsers with native HLS support or Media Source Extensions (MSE) API:
+- Chrome/Edge 90+
+- Firefox 88+
+- Safari 14+
+- Opera 76+
+
 ## Blocked / Known Limitations
 
 - **Audio Visualization** — Requires CORS headers on the CloudFront HLS stream for Web Audio API `AnalyserNode` access to frequency data. Blocked until the CDN is reconfigured.
@@ -304,3 +368,452 @@ Implemented in `KeyboardShortcutService`, registered in `App` component.
   - **Bundle budgets** (configured in `angular.json`):
     - Initial bundle: 500 kB warning threshold, 1 MB error threshold
     - Component styles: 4 kB warning, 8 kB error
+
+## Code Quality & Improvements Roadmap
+
+This roadmap tracks technical debt, bug fixes, and improvements identified through comprehensive QA review (February 2026). Issues are prioritized by severity and impact.
+
+**Overall Code Quality: B+** — Production-ready with strong security and architecture. 43 identified areas for improvement across correctness, stability, edge cases, and test coverage.
+
+### Priority Summary
+- 🔴 **Critical** (5 issues) — Fix this week
+- 🟠 **High** (12 issues) — Fix this month
+- 🟡 **Medium** (18 issues) — Next quarter
+- 🟢 **Low** (8 issues) — Future backlog
+
+### 🔴 Critical Issues (This Week)
+
+**C-1: Metadata Polling Race Condition** (`hls-player.service.ts:311-400`)
+- No retry logic if metadata endpoint fails → stale track info indefinitely
+- No abort handling for in-flight requests → race conditions on rapid track changes
+- Fix: Add AbortController, failure counter, exponential backoff
+
+**C-2: HlsPlayerService Memory Leak** (`hls-player.service.ts:464-478`)
+- Event listeners not removed in `destroy()`
+- Media Session handlers not cleared
+- In-flight fetches not aborted
+- Fix: Proper cleanup of all listeners, handlers, and pending requests
+
+**C-3: RatingService Race Condition** (`rating.service.ts:47-101`)
+- Rapid clicks corrupt optimistic state
+- Out-of-order responses overwrite correct data
+- Fix: Add pending request flag, sequence tracking, disable buttons during submission
+
+**C-4: SQL Column Name Interpolation** (`server.js:434-443`)
+- Column names use string interpolation (currently mitigated by validation)
+- Fragile if validation changes
+- Fix: Use whitelist object `VOTE_COLUMN_MAP = { 'up': 'thumbs_up', 'down': 'thumbs_down' }`
+
+**C-5: Database Pool Not Closed on Shutdown** (`server.js`)
+- Connection leaks in orchestrated environments
+- Fix: Add SIGTERM/SIGINT handlers with `pool.end()`, 10s timeout
+
+### 🟠 High Priority Issues (This Month)
+
+**H-1:** PreferencesService effect runs before `loadPreferences()` completes → may overwrite user preferences
+**H-2:** StatsService missing `ngOnDestroy()` → interval continues after destruction
+**H-3:** SleepTimer `onTimerComplete()` has no error handling → corrupt state if pause fails
+**H-4:** Rate limiting map grows unbounded → consider LRU cache or Redis
+**H-5:** Transaction rollback failure leaves client in unknown state → call `client.release(true)`
+**H-6:** Bookmark localStorage quota exceeded silently → revert in-memory state, show notification
+**H-7:** Rating revert logic incomplete → call `fetchRatings()` to sync after failure
+**H-8:** `readBody()` race condition with `req.destroy()` → add `destroyed` flag
+**H-9:** HLS error recovery timing unreliable → store error ID, check specific recovery
+**H-10:** Error logging cascade on DB failure → add circuit breaker or localStorage queue
+**H-11:** Metadata polling doesn't back off on failures → implement exponential backoff
+**H-12:** X-Forwarded-For not validated → add IP format regex
+
+### 🟡 Medium Priority Issues (Next Quarter)
+
+**Test Coverage:**
+- M-1: HlsPlayerService tests (initialization, error recovery, metadata, cleanup)
+- M-2: SleepTimerService edge cases (0 seconds, rapid start/cancel)
+- M-3: Server rate limiting tests (429 responses, headers)
+- M-4: Request validation tests (content-type, size limits, SQL patterns)
+- M-17: RatingService AbortController cleanup
+
+**Code Quality:**
+- M-5: Remove dead 409 handling in RatingService
+- M-6: Fix `isTrackBookmarked()` creating new computed signals
+- M-7: Circuit breaker for ErrorMonitoringService
+- M-8: Rate limit cleanup concurrent modification
+- M-12: Compile suspicious pattern regexes once at load
+- M-14: Reset signals in `destroy()`
+- M-15: Metadata JSON schema validation
+- M-16: Set Content-Length headers
+
+**Database:**
+- M-9: Move `cleanup_old_error_logs` to cron job (trigger runs on every insert)
+- M-11: Increase StatsService save interval (10s → 30s, currently 360 writes/hour)
+- M-13: Add CORS preflight cache headers
+
+**Other:**
+- M-18: Error handling in PlayerBar `ngAfterViewInit()`
+
+### 🟢 Low Priority Issues (Future)
+
+**Developer Experience:**
+- L-1: Remove console.log from production (use `isDevMode()`)
+- L-2: Centralize magic numbers
+- L-7: Structured logging (winston/pino)
+
+**User Experience:**
+- L-3: Toast notification for bookmark limit
+- L-6: Verify accessibility attributes
+
+**Edge Cases:**
+- L-4: Session ID in sessionStorage
+- L-5: Timezone handling in stats
+
+**Testing:**
+- L-8: E2E integration test (Playwright/Cypress)
+
+### Test Coverage Summary
+
+**Backend:** ✅ Excellent (28 tests, all passing)
+- ❌ Missing: Rate limiting, content-type validation, size limits, suspicious patterns
+
+**Frontend:** ✅ Good for core services
+- ✅ BookmarkService (22 tests), RatingService (14 tests)
+- ⚠️ HlsPlayerService needs comprehensive coverage
+- ❌ Missing: Component integration, E2E tests
+
+### Implementation Timeline
+
+**Week 1-2:** C-1 through C-5 (all critical issues)
+**Week 3-4:** H-1, H-2, H-3, M-3 (high priority start + rate limit tests)
+**Month 2:** H-5, H-6, H-11, H-12 (complete high priority)
+**Quarter:** M-1, M-7, M-9, M-4 (medium priority)
+
+### Success Metrics
+- Critical issues: 0 remaining (currently 5)
+- High issues: < 3 remaining (currently 12)
+- Test coverage: Backend 95%+, Frontend 80%+
+- Memory leaks: 0 in 24-hour stress test
+- Error recovery: 90%+ automatic recovery rate
+
+### Development Guidelines
+
+1. **HlsPlayerService:** Always add cleanup in `destroy()`, test mount/unmount cycles
+2. **API Endpoints:** Include rate limiting, validation, tests; use parameterized queries
+3. **Frontend effects:** Handle initialization timing with flags
+4. **Database:** Use transactions, handle rollback failures, close resources in finally
+5. **Testing:** Add edge cases and error scenarios, not just happy path
+
+## Security Roadmap
+
+### Current Security Posture
+
+**✅ Implemented:**
+- npm audit integration with automated weekly scans
+- Security job in CI/CD (fails on critical vulnerabilities)
+- nginx security headers (X-Content-Type-Options, X-Frame-Options, X-XSS-Protection, Referrer-Policy, X-DNS-Prefetch-Control)
+- Non-root user in Docker containers
+- Resource limits on all services
+- Parameterized database queries (prevents SQL injection)
+- Angular's built-in XSS protection
+- Input validation on API endpoints
+- **GitHub CodeQL analysis** (`.github/workflows/codeql.yml`) - SAST scanning for TypeScript/JavaScript vulnerabilities
+- **Trivy container scanning** (integrated in `docker-build.yml`) - Scans Docker images for CVEs, uploads to GitHub Security
+- **API rate limiting** (`server.js`) - 100 requests per IP per minute with configurable limits and X-RateLimit headers
+- **HTTPS/TLS configuration** (`nginx.conf`) - Ready-to-enable SSL/TLS with modern cipher suites, HSTS, and OCSP stapling
+- **Content Security Policy** (`nginx.conf`) - Comprehensive CSP headers restricting resource loading to trusted domains
+- **Request validation & size limits** (`server.js`) - JSON schema validation, content-type validation, configurable size limits per endpoint
+- **Permissions-Policy headers** (`nginx.conf`) - Restricts browser features (camera, microphone, geolocation, etc.)
+- **Dependabot automation** (`.github/dependabot.yml`) - Automated npm, Docker, and GitHub Actions dependency updates
+- **Secret scanning guide** (`docs/SECRET_SCANNING_SETUP.md`) - Comprehensive guide for enabling GitHub secret scanning
+- **Security testing guide** (`docs/SECURITY_TESTING_GUIDE.md`) - OWASP Top 10 testing procedures and penetration testing checklist
+- **Security event logging** (`server.js`) - Automated logging of rate limit violations, validation failures, and suspicious patterns
+- **Penetration testing guide** (`docs/PENETRATION_TESTING_GUIDE.md`) - Comprehensive guide for planning and executing professional security audits
+- **SIEM integration guide** (`docs/SIEM_INTEGRATION_GUIDE.md`) - Integration instructions for Elastic Stack, Splunk, Datadog, and AWS Security Hub
+- **Incident response plan** (`docs/INCIDENT_RESPONSE.md`) - Complete incident response procedures with templates and checklists
+- **WAF deployment guide** (`docs/WAF_DEPLOYMENT_GUIDE.md`) - Instructions for deploying Cloudflare, AWS WAF, or ModSecurity
+
+**⚠️ Current Limitations:**
+- HTTPS/TLS configuration requires SSL certificates to be provisioned (see nginx.conf comments for setup)
+- Professional penetration testing requires budget allocation and vendor selection (guide provided)
+- Secret scanning requires manual enablement in GitHub repository settings (guide provided)
+- SIEM integration requires infrastructure setup and configuration (guide provided)
+- WAF deployment requires service selection and configuration (guide provided)
+
+### Future Enhancements
+
+All items from the original security roadmap have been implemented. Future security improvements should be identified through:
+- Professional penetration testing results
+- Security incident learnings
+- Emerging threat landscape
+- Compliance requirements
+- Technology stack evolution
+
+### Implementation Notes
+
+- Prioritize items based on risk assessment and available resources
+- Test all security enhancements in development before production deployment
+- Document all security configurations in `SECURITY.md`
+- Review and update this roadmap quarterly
+- Consider security implications for all new features and changes
+
+### Security Feature Configuration
+
+#### API Rate Limiting
+
+Rate limiting is automatically enabled for all `/api/*` endpoints in `server.js`. Configuration:
+
+**Default settings:**
+- **Window:** 60 seconds (1 minute)
+- **Max requests:** 100 per IP per window
+- **Headers returned:** `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`, `Retry-After` (on 429)
+
+**To customize:**
+Edit constants in `server.js`:
+```javascript
+const RATE_LIMIT_WINDOW_MS = 60 * 1000;    // Change window duration
+const RATE_LIMIT_MAX_REQUESTS = 100;       // Change max requests
+```
+
+**Testing rate limits:**
+```bash
+# Send 101 requests in rapid succession
+for i in {1..101}; do curl http://localhost:3001/api/ratings?title=test&artist=test; done
+```
+
+#### HTTPS/TLS Setup
+
+HTTPS configuration is pre-configured in `nginx.conf` but requires SSL certificates. To enable:
+
+**Using Let's Encrypt (recommended):**
+```bash
+# 1. Install certbot
+apt-get install certbot python3-certbot-nginx
+
+# 2. Obtain certificate (replace with your domain)
+certbot --nginx -d yourdomain.com
+
+# 3. Update nginx.conf:
+#    - Uncomment the HTTPS server block (lines ~53-95)
+#    - Uncomment the HTTP redirect block (lines ~50-56)
+#    - Comment out the HTTP-only server block (lines ~98+)
+
+# 4. Restart nginx
+docker-compose -f docker-compose.prod.yml restart nginx
+```
+
+**Using custom certificates:**
+1. Place your certificate files in a mounted volume
+2. Update `ssl_certificate` and `ssl_certificate_key` paths in nginx.conf
+3. Uncomment the HTTPS server block and HTTP redirect
+4. Restart nginx
+
+**Testing HTTPS:**
+```bash
+curl -I https://yourdomain.com/health
+# Should return 200 OK with Strict-Transport-Security header
+```
+
+#### CodeQL Security Scanning
+
+CodeQL runs automatically on:
+- Every push to `master` branch
+- Every pull request
+- Weekly schedule (Mondays at 10:00 AM UTC)
+- Manual trigger via GitHub Actions UI
+
+**View results:**
+- GitHub Security tab → Code scanning alerts
+- Workflow artifacts: Download SARIF files from Actions runs
+
+**To run locally (requires CodeQL CLI):**
+```bash
+codeql database create codeql-db --language=javascript
+codeql database analyze codeql-db --format=sarif-latest --output=results.sarif
+```
+
+#### Trivy Container Scanning
+
+Trivy scans run automatically on Docker builds and upload results to GitHub Security.
+
+**Manual scan:**
+```bash
+# Scan local image
+docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+  aquasec/trivy image radio-calico:latest
+
+# Scan with severity filter
+docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+  aquasec/trivy image --severity CRITICAL,HIGH radio-calico:latest
+```
+
+**View results:**
+- GitHub Security tab → Vulnerability alerts
+- Workflow artifacts: Download JSON reports from Actions runs
+
+#### Content Security Policy
+
+CSP headers are automatically applied to all responses from nginx. The policy:
+- Allows resources only from `self` and whitelisted domains
+- Permits inline scripts/styles (required for Angular)
+- Restricts media/images to CloudFront CDN
+- Enforces HTTPS upgrade for all requests
+
+**Testing CSP:**
+```bash
+curl -I http://localhost:8080/
+# Should include Content-Security-Policy header
+```
+
+**Monitoring CSP violations:**
+Add a `report-uri` directive to the CSP header in nginx.conf to log violations:
+```nginx
+add_header Content-Security-Policy "... report-uri /api/csp-report;" always;
+```
+
+#### Request Validation & Size Limits
+
+Request validation and size limits are automatically enforced on all API endpoints.
+
+**Configuration (`server.js`):**
+```javascript
+const MAX_REQUEST_SIZE = 1024 * 1024;  // 1 MB general limit
+const MAX_ERROR_LOG_SIZE = 10 * 1024;  // 10 KB for error logs
+const MAX_RATING_SIZE = 1024;           // 1 KB for ratings
+```
+
+**Enforced validations:**
+- Content-Type header validation (must be `application/json`)
+- Request size limits per endpoint
+- Required field validation
+- Field type validation (string, number, etc.)
+- Field length limits (e.g., title/artist max 200 chars)
+- Suspicious pattern detection (SQL injection, XSS attempts)
+
+**Testing:**
+```bash
+# Test size limit
+dd if=/dev/zero bs=2M count=1 | curl -X POST http://localhost:3001/api/ratings \
+  -H "Content-Type: application/json" --data-binary @-
+# Should return 413 Payload Too Large
+
+# Test content-type validation
+curl -X POST http://localhost:3001/api/ratings \
+  -H "Content-Type: text/plain" -d '{"title":"test","artist":"test","rating":"up"}'
+# Should return 400 with content-type error
+```
+
+#### Security Event Logging
+
+All security events are automatically logged to console and the `error_logs` database table.
+
+**Logged events:**
+- `rate_limit_exceeded` - When IP exceeds rate limit
+- `invalid_content_type` - Wrong Content-Type header
+- `request_too_large` - Request exceeds size limit
+- `validation_failed` - Input validation failure
+- `sql_injection_attempt` - Detected SQL injection pattern
+- `xss_attempt` - Detected XSS pattern
+
+**Viewing security logs:**
+```bash
+# View console logs
+docker-compose -f docker-compose.prod.yml logs backend | grep "SECURITY EVENT"
+
+# Query database
+psql -U postgres -d radio_calico -c \
+  "SELECT * FROM error_logs WHERE source='app' AND severity='warning' ORDER BY created_at DESC LIMIT 20;"
+```
+
+**Log format:**
+```json
+{
+  "timestamp": "2024-01-15T10:30:00.000Z",
+  "event_type": "rate_limit_exceeded",
+  "client_ip": "192.168.1.100",
+  "method": "POST",
+  "path": "/api/ratings",
+  "user_agent": "curl/7.64.1",
+  "request_count": 101,
+  "limit": 100
+}
+```
+
+#### Dependabot Automated Updates
+
+Dependabot is configured to automatically create PRs for dependency updates.
+
+**Configuration (`.github/dependabot.yml`):**
+- npm dependencies: Weekly on Mondays at 9:00 UTC
+- Docker images: Weekly on Mondays at 10:00 UTC
+- GitHub Actions: Weekly on Mondays at 11:00 UTC
+
+**Managing Dependabot PRs:**
+```bash
+# List Dependabot PRs
+gh pr list --label dependencies
+
+# Merge a Dependabot PR (after review)
+gh pr merge <PR_NUMBER> --squash
+
+# Close and ignore a specific version
+gh pr close <PR_NUMBER>
+# Then add to dependabot.yml ignore list
+```
+
+**Customizing Dependabot:**
+Edit `.github/dependabot.yml` to:
+- Change update schedule
+- Add reviewers/assignees
+- Ignore specific dependencies
+- Group related updates
+
+#### Secret Scanning
+
+See `docs/SECRET_SCANNING_SETUP.md` for detailed setup instructions.
+
+**Quick setup:**
+1. Go to repository Settings → Code security and analysis
+2. Enable "Secret scanning"
+3. Enable "Push protection"
+4. Configure custom patterns (optional)
+
+**Local pre-commit scanning:**
+```bash
+# Install gitleaks
+brew install gitleaks  # macOS
+# or download from https://github.com/gitleaks/gitleaks/releases
+
+# Scan before commit
+gitleaks protect --staged
+```
+
+#### Security Testing
+
+See `docs/SECURITY_TESTING_GUIDE.md` for comprehensive testing procedures.
+
+**Quick OWASP Top 10 tests:**
+```bash
+# SQL Injection test
+curl "http://localhost:3001/api/ratings?title=test'%20OR%201=1--&artist=test"
+
+# Rate limiting test
+for i in {1..105}; do curl http://localhost:3001/api/ratings?title=test&artist=test; done
+
+# Size limit test
+dd if=/dev/zero bs=2M count=1 | curl -X POST http://localhost:3001/api/ratings \
+  -H "Content-Type: application/json" --data-binary @-
+```
+
+**Automated scanning with OWASP ZAP:**
+```bash
+# Start ZAP daemon
+zap.sh -daemon -port 8090 -config api.disablekey=true
+
+# Run baseline scan
+zap-baseline.py -t http://localhost:8080 -r zap-report.html
+```
+
+### Resources
+
+- [OWASP Top 10](https://owasp.org/www-project-top-ten/)
+- [GitHub CodeQL Documentation](https://docs.github.com/en/code-security/code-scanning)
+- [Trivy Container Scanner](https://github.com/aquasecurity/trivy)
+- [NIST Cybersecurity Framework](https://www.nist.gov/cyberframework)
+- [npm Security Best Practices](https://docs.npmjs.com/security-best-practices)

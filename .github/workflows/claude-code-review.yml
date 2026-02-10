@@ -1,24 +1,78 @@
 name: Claude Code Review
 
+# Deny all permissions by default (principle of least privilege)
+# Individual jobs explicitly grant only what they need
+permissions: {}
+
 on:
   pull_request:
-    types: [opened, synchronize, ready_for_review, reopened]
-    # Optional: Only run on specific file changes
-    # paths:
-    #   - "src/**/*.ts"
-    #   - "src/**/*.tsx"
-    #   - "src/**/*.js"
-    #   - "src/**/*.jsx"
+    # Only review on open and ready_for_review, not on every push (synchronize)
+    types: [opened, ready_for_review, reopened]
+    # Only review code files, skip documentation and configs
+    paths:
+      - "src/**/*.ts"
+      - "src/**/*.tsx"
+      - "src/**/*.js"
+      - "src/**/*.jsx"
+      - "src/**/*.html"
+      - "src/**/*.scss"
+      - "server.js"
+      - "nginx.conf"
+      - "Dockerfile"
+      - "Dockerfile.nginx"
+
+# Cancel in-progress reviews when new commits are pushed
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 jobs:
-  claude-review:
-    # Optional: Filter by PR author
-    # if: |
-    #   github.event.pull_request.user.login == 'external-contributor' ||
-    #   github.event.pull_request.user.login == 'new-developer' ||
-    #   github.event.pull_request.author_association == 'FIRST_TIME_CONTRIBUTOR'
-
+  check-pr-size:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      should_review: ${{ steps.check.outputs.should_review }}
+    steps:
+      - name: Check PR size
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Get PR stats
+          PR_DATA=$(gh pr view ${{ github.event.pull_request.number }} --repo ${{ github.repository }} --json additions,deletions,isDraft)
+          ADDITIONS=$(echo "$PR_DATA" | jq -r '.additions')
+          DELETIONS=$(echo "$PR_DATA" | jq -r '.deletions')
+          IS_DRAFT=$(echo "$PR_DATA" | jq -r '.isDraft')
+          TOTAL_CHANGES=$((ADDITIONS + DELETIONS))
+
+          echo "PR changes: +$ADDITIONS -$DELETIONS (total: $TOTAL_CHANGES)"
+          echo "Is draft: $IS_DRAFT"
+
+          # Skip if draft PR
+          if [ "$IS_DRAFT" = "true" ]; then
+            echo "⏭️ Skipping review for draft PR"
+            echo "should_review=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Skip if PR is too large (>2000 lines changed)
+          if [ "$TOTAL_CHANGES" -gt 2000 ]; then
+            echo "⏭️ PR is too large ($TOTAL_CHANGES lines). Skipping automatic review."
+            echo "should_review=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          echo "✅ PR size is acceptable. Proceeding with review."
+          echo "should_review=true" >> $GITHUB_OUTPUT
+
+  claude-review:
+    needs: check-pr-size
+    if: needs.check-pr-size.outputs.should_review == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
       pull-requests: read
@@ -38,8 +92,18 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
           plugins: 'code-review@claude-code-plugins'
-          prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'
-          allowed_bots: '*'  # <-- Add this line
+          # More focused prompt for faster reviews
+          prompt: |
+            /code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}
+
+            Focus on:
+            - Security vulnerabilities
+            - Logic errors and bugs
+            - Performance issues
+            - Breaking changes
+
+            Skip detailed style/formatting comments.
+          allowed_bots: '*'
           # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
           # or https://code.claude.com/docs/en/cli-reference for available options
 

@@ -42,13 +42,78 @@ const mimeTypes = {
     '.ico': 'image/x-icon'
 };
 
-function readBody(req) {
+// Request size limits (in bytes)
+const MAX_REQUEST_SIZE = 1024 * 1024; // 1 MB for general requests
+const MAX_ERROR_LOG_SIZE = 10 * 1024; // 10 KB for error logs
+const MAX_RATING_SIZE = 1024; // 1 KB for ratings
+
+function readBody(req, maxSize = MAX_REQUEST_SIZE) {
     return new Promise((resolve, reject) => {
         const chunks = [];
-        req.on('data', (chunk) => chunks.push(chunk));
-        req.on('end', () => resolve(Buffer.concat(chunks).toString()));
-        req.on('error', reject);
+        let totalSize = 0;
+        let resolved = false;
+
+        // Add timeout to prevent hanging
+        const timeout = setTimeout(() => {
+            if (!resolved) {
+                resolved = true;
+                req.destroy();
+                reject(new Error('Request timeout'));
+            }
+        }, 5000); // 5 second timeout
+
+        req.on('data', (chunk) => {
+            totalSize += chunk.length;
+
+            // Check if request size exceeds limit
+            if (totalSize > maxSize) {
+                clearTimeout(timeout);
+                resolved = true;
+                req.destroy();
+                reject(new Error('Request body too large'));
+                return;
+            }
+
+            chunks.push(chunk);
+        });
+
+        req.on('end', () => {
+            clearTimeout(timeout);
+            if (!resolved) {
+                resolved = true;
+                try {
+                    resolve(Buffer.concat(chunks).toString());
+                } catch (err) {
+                    reject(err);
+                }
+            }
+        });
+
+        req.on('error', (err) => {
+            clearTimeout(timeout);
+            if (!resolved) {
+                resolved = true;
+                reject(err);
+            }
+        });
     });
+}
+
+function validateContentType(req, expectedType = 'application/json') {
+    const contentType = req.headers['content-type'];
+    if (!contentType || !contentType.includes(expectedType)) {
+        return false;
+    }
+    return true;
+}
+
+function validateJsonSchema(data, requiredFields) {
+    for (const field of requiredFields) {
+        if (data[field] === undefined || data[field] === null) {
+            return { valid: false, missing: field };
+        }
+    }
+    return { valid: true };
 }
 
 function sendJson(res, statusCode, data) {
@@ -60,6 +125,149 @@ function getClientIp(req) {
     return req.headers['x-forwarded-for']?.split(',')[0].trim() ||
            req.socket.remoteAddress ||
            'unknown';
+}
+
+// Security event logging
+const SecurityEventType = {
+    RATE_LIMIT_EXCEEDED: 'rate_limit_exceeded',
+    INVALID_CONTENT_TYPE: 'invalid_content_type',
+    REQUEST_TOO_LARGE: 'request_too_large',
+    VALIDATION_FAILED: 'validation_failed',
+    SQL_INJECTION_ATTEMPT: 'sql_injection_attempt',
+    XSS_ATTEMPT: 'xss_attempt',
+    SUSPICIOUS_PATTERN: 'suspicious_pattern',
+};
+
+function logSecurityEvent(eventType, req, details = {}) {
+    try {
+        const timestamp = new Date().toISOString();
+        const clientIp = getClientIp(req);
+        const userAgent = req.headers['user-agent'] || 'unknown';
+        const path = req.url;
+        const method = req.method;
+
+        const logEntry = {
+            timestamp,
+            event_type: eventType,
+            client_ip: clientIp,
+            method,
+            path,
+            user_agent: userAgent,
+            ...details
+        };
+
+        // Log to console (in production, this could go to a logging service)
+        console.warn('🔒 SECURITY EVENT:', JSON.stringify(logEntry));
+
+        // Optionally, log to database for analysis
+        // This could be async to not block the request
+        if (pool && eventType !== SecurityEventType.RATE_LIMIT_EXCEEDED) {
+            // Avoid logging every rate limit event to reduce noise
+            pool.query(
+                `INSERT INTO error_logs (session_id, source, severity, message, metadata, user_agent)
+                 VALUES ($1, $2, $3, $4, $5, $6)`,
+                [
+                    `security-${clientIp}`,
+                    'app',
+                    'warning',
+                    `Security event: ${eventType}`,
+                    JSON.stringify(logEntry),
+                    userAgent
+                ]
+            ).catch(err => console.error('Failed to log security event to DB:', err));
+        }
+    } catch (err) {
+        // Never let logging errors break the request handler
+        console.error('Error in logSecurityEvent:', err);
+    }
+}
+
+// Detect potentially malicious patterns in input
+function detectSuspiciousPatterns(input) {
+    if (typeof input !== 'string') return null;
+
+    const patterns = [
+        { regex: /(\bOR\b|\bAND\b).*=.*('|")/i, type: 'sql_injection' },
+        { regex: /UNION\s+SELECT/i, type: 'sql_injection' },
+        { regex: /DROP\s+TABLE/i, type: 'sql_injection' },
+        { regex: /<script\b[^>]*>[\s\S]*?<\/script\b[^>]*>/i, type: 'xss' },
+        { regex: /javascript:/i, type: 'xss' },
+        { regex: /on(load|error|click)=/i, type: 'xss' },
+        { regex: /\.\.\//g, type: 'path_traversal' },
+        { regex: /%00/g, type: 'null_byte_injection' },
+    ];
+
+    for (const { regex, type } of patterns) {
+        if (regex.test(input)) {
+            return type;
+        }
+    }
+
+    return null;
+}
+
+// Rate limiting configuration
+const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
+const RATE_LIMIT_MAX_REQUESTS = 100; // Max requests per IP per window
+const rateLimitStore = new Map(); // Map<IP, { count: number, resetTime: number }>
+
+// Clean up old rate limit entries periodically
+setInterval(() => {
+    const now = Date.now();
+    for (const [ip, data] of rateLimitStore.entries()) {
+        if (now >= data.resetTime) {
+            rateLimitStore.delete(ip);
+        }
+    }
+}, RATE_LIMIT_WINDOW_MS);
+
+function checkRateLimit(req, res) {
+    const clientIp = getClientIp(req);
+    const now = Date.now();
+
+    let rateLimitData = rateLimitStore.get(clientIp);
+
+    // Initialize or reset if window expired
+    if (!rateLimitData || now >= rateLimitData.resetTime) {
+        rateLimitData = {
+            count: 0,
+            resetTime: now + RATE_LIMIT_WINDOW_MS
+        };
+        rateLimitStore.set(clientIp, rateLimitData);
+    }
+
+    rateLimitData.count++;
+
+    // Set rate limit headers
+    const remaining = Math.max(0, RATE_LIMIT_MAX_REQUESTS - rateLimitData.count);
+    const resetTime = Math.ceil(rateLimitData.resetTime / 1000);
+
+    res.setHeader('X-RateLimit-Limit', RATE_LIMIT_MAX_REQUESTS);
+    res.setHeader('X-RateLimit-Remaining', remaining);
+    res.setHeader('X-RateLimit-Reset', resetTime);
+
+    // Check if limit exceeded
+    if (rateLimitData.count > RATE_LIMIT_MAX_REQUESTS) {
+        const retryAfter = Math.ceil((rateLimitData.resetTime - now) / 1000);
+
+        // Log security event
+        logSecurityEvent(SecurityEventType.RATE_LIMIT_EXCEEDED, req, {
+            request_count: rateLimitData.count,
+            limit: RATE_LIMIT_MAX_REQUESTS,
+            retry_after: retryAfter
+        });
+
+        res.setHeader('Retry-After', retryAfter);
+        res.writeHead(429, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+            error: 'Too many requests',
+            message: `Rate limit exceeded. Maximum ${RATE_LIMIT_MAX_REQUESTS} requests per minute allowed.`,
+            retry_after: retryAfter
+        }));
+        return false;
+    }
+
+    return true;
 }
 
 const server = http.createServer(async (req, res) => {
@@ -78,6 +286,13 @@ const server = http.createServer(async (req, res) => {
             res.writeHead(204);
             res.end();
             return;
+        }
+    }
+
+    // Apply rate limiting to all API endpoints
+    if (parsedUrl.pathname.startsWith('/api/')) {
+        if (!checkRateLimit(req, res)) {
+            return; // Rate limit exceeded, response already sent
         }
     }
 
@@ -117,23 +332,98 @@ const server = http.createServer(async (req, res) => {
 
     // API: POST /api/ratings
     if (req.method === 'POST' && parsedUrl.pathname === '/api/ratings') {
-        let client;
+        // Validate content type
+        if (!validateContentType(req, 'application/json')) {
+            logSecurityEvent(SecurityEventType.INVALID_CONTENT_TYPE, req, {
+                content_type: req.headers['content-type'],
+                expected: 'application/json'
+            });
+            return sendJson(res, 400, { error: 'Content-Type must be application/json' });
+        }
+
         let body;
         try {
-            body = JSON.parse(await readBody(req));
+            // Read body with size limit for ratings
+            const rawBody = await readBody(req, MAX_RATING_SIZE);
+            body = JSON.parse(rawBody);
         } catch (err) {
+            console.error('Error reading/parsing request body:', err.message);
+
+            if (err.message === 'Request body too large') {
+                return sendJson(res, 413, { error: 'Request body too large', max_size: MAX_RATING_SIZE });
+            }
+            if (err.message === 'Request timeout') {
+                return sendJson(res, 408, { error: 'Request timeout' });
+            }
             if (err instanceof SyntaxError) {
                 return sendJson(res, 400, { error: 'Invalid JSON body' });
             }
-            throw err;
+            return sendJson(res, 500, { error: 'Internal server error' });
         }
-        try {
-            const { title, artist, rating } = body;
-            if (!title || !artist || (rating !== 'up' && rating !== 'down')) {
-                return sendJson(res, 400, { error: 'title, artist, and rating ("up" or "down") are required' });
-            }
 
-            const clientIp = getClientIp(req);
+        // Validate request body (before database operations)
+        const { title, artist, rating } = body;
+
+        // Validate required fields using schema validator
+        const validation = validateJsonSchema(body, ['title', 'artist', 'rating']);
+        if (!validation.valid) {
+            logSecurityEvent(SecurityEventType.VALIDATION_FAILED, req, {
+                reason: 'missing_field',
+                missing_field: validation.missing
+            });
+            return sendJson(res, 400, { error: `Missing required field: ${validation.missing}` });
+        }
+
+        // Validate field values
+        if (rating !== 'up' && rating !== 'down') {
+            logSecurityEvent(SecurityEventType.VALIDATION_FAILED, req, {
+                reason: 'invalid_rating_value',
+                value: rating
+            });
+            return sendJson(res, 400, { error: 'rating must be "up" or "down"' });
+        }
+
+        // Validate field types and lengths
+        if (typeof title !== 'string' || typeof artist !== 'string') {
+            logSecurityEvent(SecurityEventType.VALIDATION_FAILED, req, {
+                reason: 'invalid_field_types',
+                title_type: typeof title,
+                artist_type: typeof artist
+            });
+            return sendJson(res, 400, { error: 'title and artist must be strings' });
+        }
+        if (title.length > 200 || artist.length > 200) {
+            logSecurityEvent(SecurityEventType.VALIDATION_FAILED, req, {
+                reason: 'field_too_long',
+                title_length: title.length,
+                artist_length: artist.length
+            });
+            return sendJson(res, 400, { error: 'title and artist must be 200 characters or less' });
+        }
+
+        // Check for suspicious patterns (SQL injection, XSS attempts)
+        const titlePattern = detectSuspiciousPatterns(title);
+        const artistPattern = detectSuspiciousPatterns(artist);
+        if (titlePattern || artistPattern) {
+            logSecurityEvent(
+                titlePattern === 'sql_injection' || artistPattern === 'sql_injection'
+                    ? SecurityEventType.SQL_INJECTION_ATTEMPT
+                    : SecurityEventType.XSS_ATTEMPT,
+                req,
+                {
+                    title_pattern: titlePattern,
+                    artist_pattern: artistPattern,
+                    title: title.substring(0, 100),
+                    artist: artist.substring(0, 100)
+                }
+            );
+            // Continue processing but log the event - parameterized queries protect us
+        }
+
+        // Database operations
+        const clientIp = getClientIp(req);
+        let client;
+        try {
             client = await pool.connect();
             await client.query('BEGIN');
 
@@ -216,11 +506,31 @@ const server = http.createServer(async (req, res) => {
 
     // API: POST /api/errors
     if (req.method === 'POST' && parsedUrl.pathname === '/api/errors') {
+        // Validate content type
+        if (!validateContentType(req, 'application/json')) {
+            logSecurityEvent(SecurityEventType.INVALID_CONTENT_TYPE, req, {
+                content_type: req.headers['content-type'],
+                expected: 'application/json'
+            });
+            return sendJson(res, 400, { error: 'Content-Type must be application/json' });
+        }
+
         let body;
         try {
-            body = JSON.parse(await readBody(req));
+            // Read body with size limit for error logs
+            const rawBody = await readBody(req, MAX_ERROR_LOG_SIZE);
+            body = JSON.parse(rawBody);
         } catch (err) {
+            if (err.message === 'Request body too large') {
+                logSecurityEvent(SecurityEventType.REQUEST_TOO_LARGE, req, {
+                    max_size: MAX_ERROR_LOG_SIZE
+                });
+                return sendJson(res, 413, { error: 'Request body too large', max_size: MAX_ERROR_LOG_SIZE });
+            }
             if (err instanceof SyntaxError) {
+                logSecurityEvent(SecurityEventType.VALIDATION_FAILED, req, {
+                    reason: 'invalid_json'
+                });
                 return sendJson(res, 400, { error: 'Invalid JSON body' });
             }
             throw err;
@@ -228,8 +538,16 @@ const server = http.createServer(async (req, res) => {
         try {
             const { session_id, source, severity, message, details, metadata } = body;
 
-            if (!session_id || !source || !severity || !message) {
-                return sendJson(res, 400, { error: 'session_id, source, severity, and message are required' });
+            // Validate required fields using schema validator
+            const validation = validateJsonSchema(body, ['session_id', 'source', 'severity', 'message']);
+            if (!validation.valid) {
+                return sendJson(res, 400, { error: `Missing required field: ${validation.missing}` });
+            }
+
+            // Validate field types
+            if (typeof session_id !== 'string' || typeof source !== 'string' ||
+                typeof severity !== 'string' || typeof message !== 'string') {
+                return sendJson(res, 400, { error: 'session_id, source, severity, and message must be strings' });
             }
 
             const validSources = ['hls', 'network', 'media', 'app', 'unknown'];

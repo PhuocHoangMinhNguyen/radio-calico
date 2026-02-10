@@ -3,6 +3,10 @@
 
 name: Security Scan
 
+# Deny all permissions by default (principle of least privilege)
+# Individual jobs explicitly grant only what they need
+permissions: {}
+
 on:
   schedule:
     # Run every Monday at 9:00 AM UTC
@@ -18,6 +22,7 @@ on:
 jobs:
   security-audit:
     runs-on: ubuntu-22.04
+    timeout-minutes: 15
     permissions:
       contents: read
       security-events: write
@@ -95,6 +100,24 @@ jobs:
               .length;
 
             if (criticalVulns > 0 || highVulns > 0) {
+              // Check if an open issue already exists to avoid duplicates
+              const existingIssues = await github.rest.issues.listForRepo({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'open',
+                labels: 'security,dependencies',
+                per_page: 100
+              });
+
+              const hasOpenSecurityIssue = existingIssues.data.some(issue =>
+                issue.title.includes('Security Alert:')
+              );
+
+              if (hasOpenSecurityIssue) {
+                console.log('Open security issue already exists. Skipping duplicate creation.');
+                return;
+              }
+
               await github.rest.issues.create({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
@@ -109,21 +132,21 @@ jobs:
 
             ### Action Required
 
-            1. Review the [security audit report](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
-            2. Run \`make audit-fix\` to automatically fix vulnerabilities where possible
+            1. Review the [security audit report](${context.payload.repository.html_url}/actions/runs/${context.runId})
+            2. Run \`npm audit fix\` to automatically fix vulnerabilities where possible
             3. Manually update dependencies that cannot be auto-fixed
 
             ### Quick Commands
 
             \`\`\`bash
             # Review all vulnerabilities
-            make audit
+            npm audit
 
             # Attempt automatic fixes
-            make audit-fix
+            npm audit fix
 
             # Production dependencies only
-            make audit-prod
+            npm audit --omit=dev
             \`\`\`
 
             This issue was automatically created by the scheduled security scan.`,

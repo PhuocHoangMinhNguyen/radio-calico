@@ -3,6 +3,10 @@
 
 name: Docker Build and Push
 
+# Deny all permissions by default (principle of least privilege)
+# Individual jobs explicitly grant only what they need
+permissions: {}
+
 on:
   push:
     branches:
@@ -21,9 +25,11 @@ env:
 jobs:
   build:
     runs-on: ubuntu-22.04
+    timeout-minutes: 30
     permissions:
       contents: read
       packages: write
+      security-events: write
 
     steps:
       - name: Checkout repository
@@ -53,16 +59,18 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push Docker image (production)
+        id: build
         uses: docker/build-push-action@v5
         with:
           context: .
           target: production
           push: ${{ github.event_name == 'push' }}
+          # Load image locally on PRs for Trivy scanning, otherwise just build
+          load: ${{ github.event_name == 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          platforms: linux/amd64
 
       - name: Build development image (verification only)
         uses: docker/build-push-action@v5
@@ -74,9 +82,69 @@ jobs:
           cache-to: type=gha,mode=max
           platforms: linux/amd64
 
+      - name: List available Docker images (debugging)
+        if: github.event_name == 'pull_request'
+        run: docker images
+
+      - name: Run Trivy vulnerability scanner (production image)
+        id: trivy-sarif
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@0.29.0
+        with:
+          # Use first tag from metadata action (includes registry path)
+          # On PRs: image is loaded locally, Trivy scans from local daemon
+          # On push: image is in registry, Trivy pulls from registry
+          image-ref: ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
+          format: 'sarif'
+          output: 'trivy-results-production.sarif'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '0'  # Don't fail the build, just report
+
+      - name: Upload Trivy results to GitHub Security
+        if: always() && hashFiles('trivy-results-production.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: 'trivy-results-production.sarif'
+          category: 'container-production'
+
+      - name: Run Trivy vulnerability scanner (JSON output)
+        id: trivy-json
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@0.29.0
+        with:
+          # Use first tag from metadata action (includes registry path)
+          # On PRs: image is loaded locally, Trivy scans from local daemon
+          # On push: image is in registry, Trivy pulls from registry
+          image-ref: ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
+          format: 'json'
+          output: 'trivy-results-production.json'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+
+      - name: Upload Trivy results as artifact
+        if: always() && hashFiles('trivy-results-production.json') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-results-production-${{ github.run_number }}
+          path: trivy-results-production.json
+          retention-days: 90
+
+      - name: Check for critical vulnerabilities
+        if: hashFiles('trivy-results-production.json') != ''
+        run: |
+          critical_count=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' trivy-results-production.json)
+          high_count=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="HIGH")] | length' trivy-results-production.json)
+          echo "Critical vulnerabilities: $critical_count"
+          echo "High vulnerabilities: $high_count"
+          if [ "$critical_count" -gt 0 ]; then
+            echo "::warning::Found $critical_count critical vulnerabilities in production image"
+          fi
+
   test:
     runs-on: ubuntu-22.04
+    timeout-minutes: 15
     needs: build
+    permissions:
+      contents: read
 
     services:
       postgres:
@@ -127,3 +195,14 @@ jobs:
 
       - name: Run frontend tests
         run: npm run test:headless
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ github.run_number }}
+          path: |
+            coverage/
+            test-results/
+          retention-days: 30
+          if-no-files-found: ignore
