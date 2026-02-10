@@ -139,41 +139,46 @@ const SecurityEventType = {
 };
 
 function logSecurityEvent(eventType, req, details = {}) {
-    const timestamp = new Date().toISOString();
-    const clientIp = getClientIp(req);
-    const userAgent = req.headers['user-agent'] || 'unknown';
-    const path = req.url;
-    const method = req.method;
+    try {
+        const timestamp = new Date().toISOString();
+        const clientIp = getClientIp(req);
+        const userAgent = req.headers['user-agent'] || 'unknown';
+        const path = req.url;
+        const method = req.method;
 
-    const logEntry = {
-        timestamp,
-        event_type: eventType,
-        client_ip: clientIp,
-        method,
-        path,
-        user_agent: userAgent,
-        ...details
-    };
+        const logEntry = {
+            timestamp,
+            event_type: eventType,
+            client_ip: clientIp,
+            method,
+            path,
+            user_agent: userAgent,
+            ...details
+        };
 
-    // Log to console (in production, this could go to a logging service)
-    console.warn('🔒 SECURITY EVENT:', JSON.stringify(logEntry));
+        // Log to console (in production, this could go to a logging service)
+        console.warn('🔒 SECURITY EVENT:', JSON.stringify(logEntry));
 
-    // Optionally, log to database for analysis
-    // This could be async to not block the request
-    if (pool && eventType !== SecurityEventType.RATE_LIMIT_EXCEEDED) {
-        // Avoid logging every rate limit event to reduce noise
-        pool.query(
-            `INSERT INTO error_logs (session_id, source, severity, message, metadata, user_agent)
-             VALUES ($1, $2, $3, $4, $5, $6)`,
-            [
-                `security-${clientIp}`,
-                'app',
-                'warning',
-                `Security event: ${eventType}`,
-                JSON.stringify(logEntry),
-                userAgent
-            ]
-        ).catch(err => console.error('Failed to log security event to DB:', err));
+        // Optionally, log to database for analysis
+        // This could be async to not block the request
+        if (pool && eventType !== SecurityEventType.RATE_LIMIT_EXCEEDED) {
+            // Avoid logging every rate limit event to reduce noise
+            pool.query(
+                `INSERT INTO error_logs (session_id, source, severity, message, metadata, user_agent)
+                 VALUES ($1, $2, $3, $4, $5, $6)`,
+                [
+                    `security-${clientIp}`,
+                    'app',
+                    'warning',
+                    `Security event: ${eventType}`,
+                    JSON.stringify(logEntry),
+                    userAgent
+                ]
+            ).catch(err => console.error('Failed to log security event to DB:', err));
+        }
+    } catch (err) {
+        // Never let logging errors break the request handler
+        console.error('Error in logSecurityEvent:', err);
     }
 }
 
@@ -342,19 +347,18 @@ const server = http.createServer(async (req, res) => {
             const rawBody = await readBody(req, MAX_RATING_SIZE);
             body = JSON.parse(rawBody);
         } catch (err) {
+            console.error('Error reading/parsing request body:', err.message);
+
             if (err.message === 'Request body too large') {
-                logSecurityEvent(SecurityEventType.REQUEST_TOO_LARGE, req, {
-                    max_size: MAX_RATING_SIZE
-                });
                 return sendJson(res, 413, { error: 'Request body too large', max_size: MAX_RATING_SIZE });
             }
+            if (err.message === 'Request timeout') {
+                return sendJson(res, 408, { error: 'Request timeout' });
+            }
             if (err instanceof SyntaxError) {
-                logSecurityEvent(SecurityEventType.VALIDATION_FAILED, req, {
-                    reason: 'invalid_json'
-                });
                 return sendJson(res, 400, { error: 'Invalid JSON body' });
             }
-            throw err;
+            return sendJson(res, 500, { error: 'Internal server error' });
         }
 
         // Validate request body (before database operations)
