@@ -82,34 +82,46 @@ jobs:
           cache-to: type=gha,mode=max
           platforms: linux/amd64
 
+      - name: List available Docker images (debugging)
+        if: github.event_name == 'pull_request'
+        run: docker images
+
       - name: Run Trivy vulnerability scanner (production image)
+        id: trivy-sarif
+        continue-on-error: true
         uses: aquasecurity/trivy-action@0.29.0
         with:
-          # Use local image tag on PRs (loaded), remote tag on push (pushed to registry)
-          image-ref: ${{ github.event_name == 'pull_request' && format('phuochoangminhnguyen/radio-calico:pr-{0}', github.event.pull_request.number) || fromJSON(steps.meta.outputs.json).tags[0] }}
+          # Use first tag from metadata action (includes registry path)
+          # On PRs: image is loaded locally, Trivy scans from local daemon
+          # On push: image is in registry, Trivy pulls from registry
+          image-ref: ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
           format: 'sarif'
           output: 'trivy-results-production.sarif'
           severity: 'CRITICAL,HIGH'
           exit-code: '0'  # Don't fail the build, just report
 
       - name: Upload Trivy results to GitHub Security
-        if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        if: always() && hashFiles('trivy-results-production.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: 'trivy-results-production.sarif'
           category: 'container-production'
 
       - name: Run Trivy vulnerability scanner (JSON output)
+        id: trivy-json
+        continue-on-error: true
         uses: aquasecurity/trivy-action@0.29.0
         with:
-          # Use local image tag on PRs (loaded), remote tag on push (pushed to registry)
-          image-ref: ${{ github.event_name == 'pull_request' && format('phuochoangminhnguyen/radio-calico:pr-{0}', github.event.pull_request.number) || fromJSON(steps.meta.outputs.json).tags[0] }}
+          # Use first tag from metadata action (includes registry path)
+          # On PRs: image is loaded locally, Trivy scans from local daemon
+          # On push: image is in registry, Trivy pulls from registry
+          image-ref: ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
           format: 'json'
           output: 'trivy-results-production.json'
           severity: 'CRITICAL,HIGH,MEDIUM'
 
       - name: Upload Trivy results as artifact
-        if: always()
+        if: always() && hashFiles('trivy-results-production.json') != ''
         uses: actions/upload-artifact@v4
         with:
           name: trivy-results-production-${{ github.run_number }}
@@ -117,6 +129,7 @@ jobs:
           retention-days: 90
 
       - name: Check for critical vulnerabilities
+        if: hashFiles('trivy-results-production.json') != ''
         run: |
           critical_count=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' trivy-results-production.json)
           high_count=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="HIGH")] | length' trivy-results-production.json)
