@@ -25,6 +25,9 @@ concurrency:
 jobs:
   check-pr-size:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
     outputs:
       should_review: ${{ steps.check.outputs.should_review }}
     steps:
