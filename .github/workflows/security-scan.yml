@@ -3,6 +3,10 @@
 
 name: Security Scan
 
+# Deny all permissions by default (principle of least privilege)
+# Individual jobs explicitly grant only what they need
+permissions: {}
+
 on:
   schedule:
     # Run every Monday at 9:00 AM UTC

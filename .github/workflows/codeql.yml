@@ -11,6 +11,10 @@
 #
 name: "CodeQL Advanced"
 
+# Deny all permissions by default (principle of least privilege)
+# Individual jobs explicitly grant only what they need
+permissions: {}
+
 on:
   push:
     branches: [ "master" ]

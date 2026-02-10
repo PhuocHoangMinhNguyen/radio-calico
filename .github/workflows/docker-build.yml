@@ -3,6 +3,10 @@
 
 name: Docker Build and Push
 
+# Deny all permissions by default (principle of least privilege)
+# Individual jobs explicitly grant only what they need
+permissions: {}
+
 on:
   push:
     branches:
@@ -124,6 +128,8 @@ jobs:
   test:
     runs-on: ubuntu-22.04
     needs: build
+    permissions:
+      contents: read
 
     services:
       postgres:
