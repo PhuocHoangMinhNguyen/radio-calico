@@ -54,16 +54,18 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push Docker image (production)
+        id: build
         uses: docker/build-push-action@v5
         with:
           context: .
           target: production
           push: ${{ github.event_name == 'push' }}
+          # Load image locally on PRs for Trivy scanning, otherwise just build
+          load: ${{ github.event_name == 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          platforms: linux/amd64
 
       - name: Build development image (verification only)
         uses: docker/build-push-action@v5
@@ -78,7 +80,8 @@ jobs:
       - name: Run Trivy vulnerability scanner (production image)
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
+          # Use local image tag on PRs (loaded), remote tag on push (pushed to registry)
+          image-ref: ${{ github.event_name == 'pull_request' && format('phuochoangminhnguyen/radio-calico:pr-{0}', github.event.pull_request.number) || fromJSON(steps.meta.outputs.json).tags[0] }}
           format: 'sarif'
           output: 'trivy-results-production.sarif'
           severity: 'CRITICAL,HIGH'
@@ -94,7 +97,8 @@ jobs:
       - name: Run Trivy vulnerability scanner (JSON output)
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
+          # Use local image tag on PRs (loaded), remote tag on push (pushed to registry)
+          image-ref: ${{ github.event_name == 'pull_request' && format('phuochoangminhnguyen/radio-calico:pr-{0}', github.event.pull_request.number) || fromJSON(steps.meta.outputs.json).tags[0] }}
           format: 'json'
           output: 'trivy-results-production.json'
           severity: 'CRITICAL,HIGH,MEDIUM'
