@@ -4,7 +4,7 @@
 
 # Stage 1: Base Node.js environment
 # Updated to Node.js 22 LTS to satisfy Angular 21 requirement (requires >=20.19 or >=22.12)
-FROM node:22-alpine AS base
+FROM node:25-alpine AS base
 WORKDIR /app
 
 # Install system dependencies required for node-gyp (pg native bindings)
@@ -55,7 +55,7 @@ RUN npm run build:prod
 
 # Stage 4: Production target
 # Minimal runtime image with only production dependencies and built assets
-FROM node:22-alpine AS production
+FROM node:25-alpine AS production
 
 LABEL maintainer="Radio Calico"
 LABEL description="Radio Calico production server - Angular + Node.js API"
