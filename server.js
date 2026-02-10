@@ -163,7 +163,7 @@ function detectSuspiciousPatterns(input) {
         { regex: /(\bOR\b|\bAND\b).*=.*('|")/i, type: 'sql_injection' },
         { regex: /UNION\s+SELECT/i, type: 'sql_injection' },
         { regex: /DROP\s+TABLE/i, type: 'sql_injection' },
-        { regex: /<script\b[^>]*>[\s\S]*?<\/script[\s]*>/i, type: 'xss' },
+        { regex: /<script\b[^>]*>[\s\S]*?<\/script\b[^>]*>/i, type: 'xss' },
         { regex: /javascript:/i, type: 'xss' },
         { regex: /on(load|error|click)=/i, type: 'xss' },
         { regex: /\.\.\//g, type: 'path_traversal' },
