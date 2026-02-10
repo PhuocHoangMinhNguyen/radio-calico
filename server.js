@@ -51,12 +51,24 @@ function readBody(req, maxSize = MAX_REQUEST_SIZE) {
     return new Promise((resolve, reject) => {
         const chunks = [];
         let totalSize = 0;
+        let resolved = false;
+
+        // Add timeout to prevent hanging
+        const timeout = setTimeout(() => {
+            if (!resolved) {
+                resolved = true;
+                req.destroy();
+                reject(new Error('Request timeout'));
+            }
+        }, 5000); // 5 second timeout
 
         req.on('data', (chunk) => {
             totalSize += chunk.length;
 
             // Check if request size exceeds limit
             if (totalSize > maxSize) {
+                clearTimeout(timeout);
+                resolved = true;
                 req.destroy();
                 reject(new Error('Request body too large'));
                 return;
@@ -66,14 +78,24 @@ function readBody(req, maxSize = MAX_REQUEST_SIZE) {
         });
 
         req.on('end', () => {
-            try {
-                resolve(Buffer.concat(chunks).toString());
-            } catch (err) {
-                reject(err);
+            clearTimeout(timeout);
+            if (!resolved) {
+                resolved = true;
+                try {
+                    resolve(Buffer.concat(chunks).toString());
+                } catch (err) {
+                    reject(err);
+                }
             }
         });
 
-        req.on('error', reject);
+        req.on('error', (err) => {
+            clearTimeout(timeout);
+            if (!resolved) {
+                resolved = true;
+                reject(err);
+            }
+        });
     });
 }
 
@@ -314,7 +336,6 @@ const server = http.createServer(async (req, res) => {
             return sendJson(res, 400, { error: 'Content-Type must be application/json' });
         }
 
-        let client;
         let body;
         try {
             // Read body with size limit for ratings
@@ -335,66 +356,70 @@ const server = http.createServer(async (req, res) => {
             }
             throw err;
         }
+
+        // Validate request body (before database operations)
+        const { title, artist, rating } = body;
+
+        // Validate required fields using schema validator
+        const validation = validateJsonSchema(body, ['title', 'artist', 'rating']);
+        if (!validation.valid) {
+            logSecurityEvent(SecurityEventType.VALIDATION_FAILED, req, {
+                reason: 'missing_field',
+                missing_field: validation.missing
+            });
+            return sendJson(res, 400, { error: `Missing required field: ${validation.missing}` });
+        }
+
+        // Validate field values
+        if (rating !== 'up' && rating !== 'down') {
+            logSecurityEvent(SecurityEventType.VALIDATION_FAILED, req, {
+                reason: 'invalid_rating_value',
+                value: rating
+            });
+            return sendJson(res, 400, { error: 'rating must be "up" or "down"' });
+        }
+
+        // Validate field types and lengths
+        if (typeof title !== 'string' || typeof artist !== 'string') {
+            logSecurityEvent(SecurityEventType.VALIDATION_FAILED, req, {
+                reason: 'invalid_field_types',
+                title_type: typeof title,
+                artist_type: typeof artist
+            });
+            return sendJson(res, 400, { error: 'title and artist must be strings' });
+        }
+        if (title.length > 200 || artist.length > 200) {
+            logSecurityEvent(SecurityEventType.VALIDATION_FAILED, req, {
+                reason: 'field_too_long',
+                title_length: title.length,
+                artist_length: artist.length
+            });
+            return sendJson(res, 400, { error: 'title and artist must be 200 characters or less' });
+        }
+
+        // Check for suspicious patterns (SQL injection, XSS attempts)
+        const titlePattern = detectSuspiciousPatterns(title);
+        const artistPattern = detectSuspiciousPatterns(artist);
+        if (titlePattern || artistPattern) {
+            logSecurityEvent(
+                titlePattern === 'sql_injection' || artistPattern === 'sql_injection'
+                    ? SecurityEventType.SQL_INJECTION_ATTEMPT
+                    : SecurityEventType.XSS_ATTEMPT,
+                req,
+                {
+                    title_pattern: titlePattern,
+                    artist_pattern: artistPattern,
+                    title: title.substring(0, 100),
+                    artist: artist.substring(0, 100)
+                }
+            );
+            // Continue processing but log the event - parameterized queries protect us
+        }
+
+        // Database operations
+        const clientIp = getClientIp(req);
+        let client;
         try {
-            const { title, artist, rating } = body;
-
-            // Validate required fields using schema validator
-            const validation = validateJsonSchema(body, ['title', 'artist', 'rating']);
-            if (!validation.valid) {
-                logSecurityEvent(SecurityEventType.VALIDATION_FAILED, req, {
-                    reason: 'missing_field',
-                    missing_field: validation.missing
-                });
-                return sendJson(res, 400, { error: `Missing required field: ${validation.missing}` });
-            }
-
-            // Validate field values
-            if (rating !== 'up' && rating !== 'down') {
-                logSecurityEvent(SecurityEventType.VALIDATION_FAILED, req, {
-                    reason: 'invalid_rating_value',
-                    value: rating
-                });
-                return sendJson(res, 400, { error: 'rating must be "up" or "down"' });
-            }
-
-            // Validate field types and lengths
-            if (typeof title !== 'string' || typeof artist !== 'string') {
-                logSecurityEvent(SecurityEventType.VALIDATION_FAILED, req, {
-                    reason: 'invalid_field_types',
-                    title_type: typeof title,
-                    artist_type: typeof artist
-                });
-                return sendJson(res, 400, { error: 'title and artist must be strings' });
-            }
-            if (title.length > 200 || artist.length > 200) {
-                logSecurityEvent(SecurityEventType.VALIDATION_FAILED, req, {
-                    reason: 'field_too_long',
-                    title_length: title.length,
-                    artist_length: artist.length
-                });
-                return sendJson(res, 400, { error: 'title and artist must be 200 characters or less' });
-            }
-
-            // Check for suspicious patterns (SQL injection, XSS attempts)
-            const titlePattern = detectSuspiciousPatterns(title);
-            const artistPattern = detectSuspiciousPatterns(artist);
-            if (titlePattern || artistPattern) {
-                logSecurityEvent(
-                    titlePattern === 'sql_injection' || artistPattern === 'sql_injection'
-                        ? SecurityEventType.SQL_INJECTION_ATTEMPT
-                        : SecurityEventType.XSS_ATTEMPT,
-                    req,
-                    {
-                        title_pattern: titlePattern,
-                        artist_pattern: artistPattern,
-                        title: title.substring(0, 100),
-                        artist: artist.substring(0, 100)
-                    }
-                );
-                // Continue processing but log the event - parameterized queries protect us
-            }
-
-            const clientIp = getClientIp(req);
             client = await pool.connect();
             await client.query('BEGIN');
 
