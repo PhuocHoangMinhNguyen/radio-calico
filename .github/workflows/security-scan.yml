@@ -22,6 +22,7 @@ on:
 jobs:
   security-audit:
     runs-on: ubuntu-22.04
+    timeout-minutes: 15
     permissions:
       contents: read
       security-events: write
@@ -99,6 +100,24 @@ jobs:
               .length;
 
             if (criticalVulns > 0 || highVulns > 0) {
+              // Check if an open issue already exists to avoid duplicates
+              const existingIssues = await github.rest.issues.listForRepo({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'open',
+                labels: 'security,dependencies',
+                per_page: 100
+              });
+
+              const hasOpenSecurityIssue = existingIssues.data.some(issue =>
+                issue.title.includes('Security Alert:')
+              );
+
+              if (hasOpenSecurityIssue) {
+                console.log('Open security issue already exists. Skipping duplicate creation.');
+                return;
+              }
+
               await github.rest.issues.create({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
@@ -113,7 +132,7 @@ jobs:
 
             ### Action Required
 
-            1. Review the [security audit report](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            1. Review the [security audit report](${context.payload.repository.html_url}/actions/runs/${context.runId})
             2. Run \`npm audit fix\` to automatically fix vulnerabilities where possible
             3. Manually update dependencies that cannot be auto-fixed
 

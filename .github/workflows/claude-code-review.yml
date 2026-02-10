@@ -29,6 +29,7 @@ concurrency:
 jobs:
   check-pr-size:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       contents: read
       pull-requests: read
@@ -71,6 +72,7 @@ jobs:
     needs: check-pr-size
     if: needs.check-pr-size.outputs.should_review == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
       pull-requests: read
