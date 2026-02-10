@@ -89,7 +89,7 @@ jobs:
       - name: Run Trivy vulnerability scanner (production image)
         id: trivy-sarif
         continue-on-error: true
-        uses: aquasecurity/trivy-action@0.29.0
+        uses: aquasecurity/trivy-action@0.33.1
         with:
           # Use first tag from metadata action (includes registry path)
           # On PRs: image is loaded locally, Trivy scans from local daemon
@@ -110,7 +110,7 @@ jobs:
       - name: Run Trivy vulnerability scanner (JSON output)
         id: trivy-json
         continue-on-error: true
-        uses: aquasecurity/trivy-action@0.29.0
+        uses: aquasecurity/trivy-action@0.33.1
         with:
           # Use first tag from metadata action (includes registry path)
           # On PRs: image is loaded locally, Trivy scans from local daemon
