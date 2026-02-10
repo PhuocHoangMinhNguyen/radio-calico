@@ -1,5 +1,9 @@
 name: Claude Code Review
 
+# Deny all permissions by default (principle of least privilege)
+# Individual jobs explicitly grant only what they need
+permissions: {}
+
 on:
   pull_request:
     # Only review on open and ready_for_review, not on every push (synchronize)
