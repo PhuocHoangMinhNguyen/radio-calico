@@ -221,7 +221,7 @@ describe('BookmarkService', () => {
   // -------------------------------------------------------------------------
   describe('error handling', () => {
     it('logs a warning and continues when localStorage.setItem fails', () => {
-      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
       // Make setItem throw an error (e.g., quota exceeded)
       const originalSetItem = localStorage.setItem;
@@ -231,15 +231,15 @@ describe('BookmarkService', () => {
 
       service.add('Song', 'Artist');
 
-      // Service still updates in-memory state
-      expect(service.count()).toBe(1);
+      // Service should revert state on failure (quota exceeded triggers revert)
+      expect(service.count()).toBe(0);
 
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
         '[BookmarkService] Failed to save bookmarks:',
         expect.any(DOMException)
       );
 
-      consoleWarnSpy.mockRestore();
+      consoleErrorSpy.mockRestore();
       localStorage.setItem = originalSetItem;
     });
   });
