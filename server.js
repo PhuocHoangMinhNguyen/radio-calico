@@ -52,23 +52,29 @@ function readBody(req, maxSize = MAX_REQUEST_SIZE) {
         const chunks = [];
         let totalSize = 0;
         let resolved = false;
+        let destroyed = false;
 
         // Add timeout to prevent hanging
         const timeout = setTimeout(() => {
             if (!resolved) {
                 resolved = true;
+                destroyed = true;
                 req.destroy();
                 reject(new Error('Request timeout'));
             }
         }, 5000); // 5 second timeout
 
         req.on('data', (chunk) => {
+            // Don't process data if request was already destroyed
+            if (destroyed) return;
+
             totalSize += chunk.length;
 
             // Check if request size exceeds limit
             if (totalSize > maxSize) {
                 clearTimeout(timeout);
                 resolved = true;
+                destroyed = true;
                 req.destroy();
                 reject(new Error('Request body too large'));
                 return;
@@ -79,7 +85,8 @@ function readBody(req, maxSize = MAX_REQUEST_SIZE) {
 
         req.on('end', () => {
             clearTimeout(timeout);
-            if (!resolved) {
+            // Don't process end event if request was already destroyed
+            if (!resolved && !destroyed) {
                 resolved = true;
                 try {
                     resolve(Buffer.concat(chunks).toString());
@@ -93,6 +100,7 @@ function readBody(req, maxSize = MAX_REQUEST_SIZE) {
             clearTimeout(timeout);
             if (!resolved) {
                 resolved = true;
+                destroyed = true;
                 reject(err);
             }
         });
@@ -117,14 +125,63 @@ function validateJsonSchema(data, requiredFields) {
 }
 
 function sendJson(res, statusCode, data) {
-    res.writeHead(statusCode, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify(data));
+    const body = JSON.stringify(data);
+    res.writeHead(statusCode, {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(body)
+    });
+    res.end(body);
+}
+
+// IP address validation regex (IPv4 and IPv6)
+const IP_V4_REGEX = /^(\d{1,3}\.){3}\d{1,3}$/;
+const IP_V6_REGEX = /^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}$/;
+
+function isValidIp(ip) {
+    if (!ip || typeof ip !== 'string') return false;
+
+    // Remove any whitespace
+    ip = ip.trim();
+
+    // Check IPv4
+    if (IP_V4_REGEX.test(ip)) {
+        // Validate octets are in range 0-255
+        const octets = ip.split('.');
+        return octets.every(octet => {
+            const num = parseInt(octet, 10);
+            return num >= 0 && num <= 255;
+        });
+    }
+
+    // Check IPv6
+    if (IP_V6_REGEX.test(ip)) {
+        return true;
+    }
+
+    return false;
 }
 
 function getClientIp(req) {
-    return req.headers['x-forwarded-for']?.split(',')[0].trim() ||
-           req.socket.remoteAddress ||
-           'unknown';
+    // Try X-Forwarded-For header first (proxy/load balancer)
+    const forwardedFor = req.headers['x-forwarded-for'];
+    if (forwardedFor) {
+        // X-Forwarded-For can contain multiple IPs, take the first one
+        const firstIp = forwardedFor.split(',')[0].trim();
+        if (isValidIp(firstIp)) {
+            return firstIp;
+        }
+        // If invalid, log security event but don't fail
+        console.warn('Invalid X-Forwarded-For IP:', firstIp);
+    }
+
+    // Fall back to socket remote address
+    const socketIp = req.socket.remoteAddress;
+    if (socketIp && isValidIp(socketIp)) {
+        return socketIp;
+    }
+
+    // Last resort
+    return 'unknown';
 }
 
 // Security event logging
@@ -182,22 +239,23 @@ function logSecurityEvent(eventType, req, details = {}) {
     }
 }
 
+// Compile suspicious patterns once at load time for performance
+const SUSPICIOUS_PATTERNS = [
+    { regex: /(\bOR\b|\bAND\b).*=.*('|")/i, type: 'sql_injection' },
+    { regex: /UNION\s+SELECT/i, type: 'sql_injection' },
+    { regex: /DROP\s+TABLE/i, type: 'sql_injection' },
+    { regex: /<script\b[^>]*>[\s\S]*?<\/script\b[^>]*>/i, type: 'xss' },
+    { regex: /javascript:/i, type: 'xss' },
+    { regex: /on(load|error|click)=/i, type: 'xss' },
+    { regex: /\.\.\//g, type: 'path_traversal' },
+    { regex: /%00/g, type: 'null_byte_injection' },
+];
+
 // Detect potentially malicious patterns in input
 function detectSuspiciousPatterns(input) {
     if (typeof input !== 'string') return null;
 
-    const patterns = [
-        { regex: /(\bOR\b|\bAND\b).*=.*('|")/i, type: 'sql_injection' },
-        { regex: /UNION\s+SELECT/i, type: 'sql_injection' },
-        { regex: /DROP\s+TABLE/i, type: 'sql_injection' },
-        { regex: /<script\b[^>]*>[\s\S]*?<\/script\b[^>]*>/i, type: 'xss' },
-        { regex: /javascript:/i, type: 'xss' },
-        { regex: /on(load|error|click)=/i, type: 'xss' },
-        { regex: /\.\.\//g, type: 'path_traversal' },
-        { regex: /%00/g, type: 'null_byte_injection' },
-    ];
-
-    for (const { regex, type } of patterns) {
+    for (const { regex, type } of SUSPICIOUS_PATTERNS) {
         if (regex.test(input)) {
             return type;
         }
@@ -209,15 +267,30 @@ function detectSuspiciousPatterns(input) {
 // Rate limiting configuration
 const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
 const RATE_LIMIT_MAX_REQUESTS = 100; // Max requests per IP per window
+const RATE_LIMIT_MAX_IPS = 10000; // Max number of unique IPs to track (prevents unbounded growth)
 const rateLimitStore = new Map(); // Map<IP, { count: number, resetTime: number }>
+
+// Vote column whitelist for safe SQL column name usage
+const VOTE_COLUMN_MAP = {
+    'up': 'thumbs_up',
+    'down': 'thumbs_down'
+};
 
 // Clean up old rate limit entries periodically
 setInterval(() => {
     const now = Date.now();
+    const ipsToDelete = [];
+
+    // Collect IPs to delete (avoid modification during iteration)
     for (const [ip, data] of rateLimitStore.entries()) {
         if (now >= data.resetTime) {
-            rateLimitStore.delete(ip);
+            ipsToDelete.push(ip);
         }
+    }
+
+    // Delete collected IPs
+    for (const ip of ipsToDelete) {
+        rateLimitStore.delete(ip);
     }
 }, RATE_LIMIT_WINDOW_MS);
 
@@ -233,6 +306,16 @@ function checkRateLimit(req, res) {
             count: 0,
             resetTime: now + RATE_LIMIT_WINDOW_MS
         };
+
+        // Prevent unbounded growth by enforcing max size
+        if (rateLimitStore.size >= RATE_LIMIT_MAX_IPS) {
+            // Remove oldest entry (first entry in iteration order)
+            const firstKey = rateLimitStore.keys().next().value;
+            if (firstKey) {
+                rateLimitStore.delete(firstKey);
+            }
+        }
+
         rateLimitStore.set(clientIp, rateLimitData);
     }
 
@@ -423,6 +506,8 @@ const server = http.createServer(async (req, res) => {
         // Database operations
         const clientIp = getClientIp(req);
         let client;
+        let clientReleased = false;
+
         try {
             client = await pool.connect();
             await client.query('BEGIN');
@@ -459,8 +544,9 @@ const server = http.createServer(async (req, res) => {
                         [rating, title, artist, clientIp]
                     );
 
-                    const oldColumn = oldVote === 'up' ? 'thumbs_up' : 'thumbs_down';
-                    const newColumn = rating === 'up' ? 'thumbs_up' : 'thumbs_down';
+                    // Use whitelist to map rating to column name (safe from injection)
+                    const oldColumn = VOTE_COLUMN_MAP[oldVote];
+                    const newColumn = VOTE_COLUMN_MAP[rating];
                     const result = await client.query(
                         `UPDATE song_ratings
                          SET ${oldColumn} = GREATEST(0, ${oldColumn} - 1), ${newColumn} = ${newColumn} + 1
@@ -478,7 +564,8 @@ const server = http.createServer(async (req, res) => {
                     [title, artist, clientIp, rating]
                 );
 
-                const column = rating === 'up' ? 'thumbs_up' : 'thumbs_down';
+                // Use whitelist to map rating to column name (safe from injection)
+                const column = VOTE_COLUMN_MAP[rating];
                 const result = await client.query(
                     `INSERT INTO song_ratings (song_title, song_artist, ${column})
                      VALUES ($1, $2, 1)
@@ -494,13 +581,30 @@ const server = http.createServer(async (req, res) => {
             await client.query('COMMIT');
             return sendJson(res, 200, { thumbs_up, thumbs_down, user_vote: rating });
         } catch (err) {
+            let rollbackFailed = false;
             if (client) {
-                try { await client.query('ROLLBACK'); } catch (e) { /* ignore rollback errors */ }
+                try {
+                    await client.query('ROLLBACK');
+                } catch (rollbackError) {
+                    // If rollback fails, the client is in an unknown state
+                    console.error('ROLLBACK failed:', rollbackError);
+                    rollbackFailed = true;
+                }
             }
             console.error('DB error (POST /api/ratings):', err);
+
+            // Release client (discard if rollback failed)
+            if (client) {
+                client.release(rollbackFailed);
+                clientReleased = true;
+            }
+
             return sendJson(res, 500, { error: 'Database error' });
         } finally {
-            if (client) client.release();
+            // Only release if not already released in catch block
+            if (client && !clientReleased) {
+                client.release();
+            }
         }
     }
 
@@ -616,6 +720,36 @@ const server = http.createServer(async (req, res) => {
     });
 });
 
+// Graceful shutdown handler
+async function gracefulShutdown(signal) {
+    console.log(`\n${signal} received. Starting graceful shutdown...`);
+
+    // Close the HTTP server first (stop accepting new connections)
+    server.close(() => {
+        console.log('HTTP server closed');
+    });
+
+    // Close database pool with timeout
+    try {
+        const shutdownTimeout = setTimeout(() => {
+            console.error('Database pool close timeout - forcing shutdown');
+            process.exit(1);
+        }, 10000); // 10 second timeout
+
+        await pool.end();
+        clearTimeout(shutdownTimeout);
+        console.log('Database pool closed');
+        process.exit(0);
+    } catch (err) {
+        console.error('Error closing database pool:', err);
+        process.exit(1);
+    }
+}
+
+// Register shutdown handlers
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
 if (require.main === module) {
     server.listen(PORT, () => {
         console.log(`\n🎵 Radio Calico Server Running!`);
@@ -625,4 +759,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = { server, pool };
+module.exports = { server, pool, rateLimitStore };

@@ -1,4 +1,4 @@
-import { Injectable, signal, ErrorHandler, inject } from '@angular/core';
+import { Injectable, signal, ErrorHandler, inject, isDevMode } from '@angular/core';
 
 export type ErrorSeverity = 'info' | 'warning' | 'error' | 'fatal';
 export type ErrorSource = 'hls' | 'network' | 'media' | 'app' | 'unknown';
@@ -27,6 +27,12 @@ export class ErrorMonitoringService {
 
   // Session ID persists for the lifetime of the page
   private readonly sessionId = this.generateSessionId();
+
+  // Circuit breaker for backend logging
+  private backendFailureCount = 0;
+  private readonly MAX_BACKEND_FAILURES = 3;
+  private backendCircuitOpen = false;
+  private backendCircuitResetTimeout: ReturnType<typeof setTimeout> | null = null;
 
   readonly errors = this._errors.asReadonly();
   readonly recoveryAttempts = this._recoveryAttempts.asReadonly();
@@ -112,7 +118,9 @@ export class ErrorMonitoringService {
       );
     }
 
-    console.log(`[ErrorMonitor] Recovery attempt #${this._recoveryAttempts()}`);
+    if (isDevMode()) {
+      console.log(`[ErrorMonitor] Recovery attempt #${this._recoveryAttempts()}`);
+    }
   }
 
   /**
@@ -127,9 +135,11 @@ export class ErrorMonitoringService {
       );
     }
 
-    console.log(
-      `[ErrorMonitor] Recovery successful (${this._successfulRecoveries()}/${this._recoveryAttempts()})`
-    );
+    if (isDevMode()) {
+      console.log(
+        `[ErrorMonitor] Recovery successful (${this._successfulRecoveries()}/${this._recoveryAttempts()})`
+      );
+    }
   }
 
   /**
@@ -212,9 +222,15 @@ export class ErrorMonitoringService {
   }
 
   /**
-   * Send error to backend PostgreSQL database
+   * Send error to backend PostgreSQL database with circuit breaker
    */
   private sendToExternalService(error: TrackedError): void {
+    // Circuit breaker: Don't send if circuit is open (backend is down)
+    if (this.backendCircuitOpen) {
+      // Queue to localStorage as fallback (optional - could implement later)
+      return;
+    }
+
     const payload = {
       session_id: this.sessionId,
       source: error.source,
@@ -228,10 +244,48 @@ export class ErrorMonitoringService {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
-    }).catch((err) => {
-      // Silently fail - don't create infinite error loops
-      console.warn('[ErrorMonitor] Failed to send error to backend:', err.message);
-    });
+    })
+      .then((response) => {
+        if (response.ok) {
+          // Success - reset failure count
+          this.backendFailureCount = 0;
+        } else {
+          // Non-2xx response counts as failure
+          this.handleBackendFailure();
+        }
+      })
+      .catch((err) => {
+        // Network error or other failure
+        console.warn('[ErrorMonitor] Failed to send error to backend:', err.message);
+        this.handleBackendFailure();
+      });
+  }
+
+  /**
+   * Handle backend logging failure with circuit breaker
+   */
+  private handleBackendFailure(): void {
+    this.backendFailureCount++;
+
+    if (this.backendFailureCount >= this.MAX_BACKEND_FAILURES) {
+      // Open circuit - stop sending errors to backend
+      this.backendCircuitOpen = true;
+      console.warn(
+        `[ErrorMonitor] Circuit breaker opened after ${this.MAX_BACKEND_FAILURES} failures. Backend logging paused for 60 seconds.`
+      );
+
+      // Clear any existing reset timeout
+      if (this.backendCircuitResetTimeout) {
+        clearTimeout(this.backendCircuitResetTimeout);
+      }
+
+      // Reset circuit after 60 seconds
+      this.backendCircuitResetTimeout = setTimeout(() => {
+        this.backendCircuitOpen = false;
+        this.backendFailureCount = 0;
+        console.info('[ErrorMonitor] Circuit breaker closed. Backend logging resumed.');
+      }, 60000);
+    }
   }
 }
 

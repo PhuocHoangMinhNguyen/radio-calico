@@ -52,7 +52,14 @@ export class PlayerBar implements AfterViewInit, OnDestroy {
 
   ngAfterViewInit(): void {
     if (this.audioPlayerRef) {
-      this.hlsService.initializePlayer(this.audioPlayerRef.nativeElement, this.streamUrl);
+      try {
+        this.hlsService.initializePlayer(this.audioPlayerRef.nativeElement, this.streamUrl);
+      } catch (error) {
+        console.error('[PlayerBar] Failed to initialize HLS player:', error);
+        // The HlsPlayerService will handle error state and display error message to user
+      }
+    } else {
+      console.error('[PlayerBar] Audio player element ref not found');
     }
   }
 

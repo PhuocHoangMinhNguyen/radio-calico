@@ -14,6 +14,7 @@ export class SongRating {
 
   ratings = this.ratingService.ratings;
   userRating = this.ratingService.userRating;
+  isPending = this.ratingService.isPending;
   hasTrackInfo = this.hlsService.hasTrackInfo;
 
   constructor() {
