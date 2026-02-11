@@ -7,11 +7,6 @@ name: Docker Build and Push
 # Individual jobs explicitly grant only what they need
 permissions: {}
 
-# Cancel in-progress runs when a new run is triggered on the same branch
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 on:
   push:
     branches:
@@ -76,12 +71,8 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          # Enable BuildKit features (cache mounts, etc.)
-          build-args: |
-            BUILDKIT_INLINE_CACHE=1
 
-      - name: Build development image (verification only - push events only)
-        if: github.event_name == 'push'
+      - name: Build development image (verification only)
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -90,8 +81,6 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64
-          build-args: |
-            BUILDKIT_INLINE_CACHE=1
 
       - name: List available Docker images (debugging)
         if: github.event_name == 'pull_request'

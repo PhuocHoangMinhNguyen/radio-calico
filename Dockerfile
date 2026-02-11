@@ -13,11 +13,7 @@ RUN apk add --no-cache python3 make g++
 # Copy package files and install dependencies
 # Separate layer for better caching - dependencies change less frequently than source
 COPY package.json package-lock.json ./
-
-# Use BuildKit cache mount for npm cache to speed up rebuilds
-# This persists the npm cache across builds without adding to image size
-RUN --mount=type=cache,target=/root/.npm \
-    npm ci --prefer-offline --no-audit --no-fund --legacy-peer-deps
+RUN npm ci --prefer-offline --no-audit --no-fund --legacy-peer-deps
 
 # Stage 2: Development target
 # Used for local development with hot-reload support
@@ -67,10 +63,9 @@ LABEL stage=production
 
 WORKDIR /app
 
-# Install production dependencies only using cache mount
+# Install production dependencies only
 COPY package.json package-lock.json ./
-RUN --mount=type=cache,target=/root/.npm \
-    npm ci --omit=dev --prefer-offline --no-audit --no-fund --legacy-peer-deps
+RUN npm ci --omit=dev --prefer-offline --no-audit --no-fund --legacy-peer-deps
 
 # Copy backend server
 COPY server.js ./
