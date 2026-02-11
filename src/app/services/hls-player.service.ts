@@ -1,4 +1,4 @@
-import { Injectable, signal, computed, inject } from '@angular/core';
+import { Injectable, signal, computed, inject, isDevMode } from '@angular/core';
 import Hls from 'hls.js';
 import { TrackInfo, StreamMetadata } from '../models/track-info';
 import { AnnouncerService } from './announcer.service';
@@ -27,6 +27,12 @@ export class HlsPlayerService {
   private hls: Hls | null = null;
   private audioElement: HTMLAudioElement | null = null;
   private metadataIntervalId: ReturnType<typeof setInterval> | null = null;
+  private metadataAbortController: AbortController | null = null;
+  private metadataFailureCount = 0;
+  private readonly MAX_METADATA_FAILURES = 5;
+
+  // Track recovering error IDs for reliable recovery detection
+  private recoveringErrorIds = new Set<string>();
 
   // Writable signals for internal state management
   private _isPlaying = signal<boolean>(false);
@@ -130,7 +136,9 @@ export class HlsPlayerService {
       if (data.levels && data.levels.length > 0) {
         this._bitrate.set(Math.round(data.levels[0].bitrate / 1000));
       }
-      console.log('HLS manifest loaded successfully');
+      if (isDevMode()) {
+        console.log('HLS manifest loaded successfully');
+      }
     });
 
     // Track fragment load times for latency measurement
@@ -163,11 +171,14 @@ export class HlsPlayerService {
             this._status.set('error');
             this._statusMessage.set('Network error - Retrying...');
             this.errorMonitoring.recordRecoveryAttempt(errorId);
+            this.recoveringErrorIds.add(errorId);
             this.hls!.startLoad();
             // Track successful recovery after a short delay
             setTimeout(() => {
-              if (this._status() !== 'error') {
+              // Check if this specific error recovered
+              if (this.recoveringErrorIds.has(errorId) && this._status() !== 'error') {
                 this.errorMonitoring.recordSuccessfulRecovery(errorId);
+                this.recoveringErrorIds.delete(errorId);
               }
             }, 5000);
             break;
@@ -175,11 +186,14 @@ export class HlsPlayerService {
             this._status.set('error');
             this._statusMessage.set('Media error - Recovering...');
             this.errorMonitoring.recordRecoveryAttempt(errorId);
+            this.recoveringErrorIds.add(errorId);
             this.hls!.recoverMediaError();
             // Track successful recovery after a short delay
             setTimeout(() => {
-              if (this._status() !== 'error') {
+              // Check if this specific error recovered
+              if (this.recoveringErrorIds.has(errorId) && this._status() !== 'error') {
                 this.errorMonitoring.recordSuccessfulRecovery(errorId);
+                this.recoveringErrorIds.delete(errorId);
               }
             }, 5000);
             break;
@@ -208,7 +222,9 @@ export class HlsPlayerService {
    */
   private setupMediaSession(): void {
     if (!('mediaSession' in navigator)) {
-      console.log('Media Session API not supported');
+      if (isDevMode()) {
+        console.log('Media Session API not supported');
+      }
       return;
     }
 
@@ -236,7 +252,9 @@ export class HlsPlayerService {
       this.pause();
     });
 
-    console.log('Media Session API initialized');
+    if (isDevMode()) {
+      console.log('Media Session API initialized');
+    }
   }
 
   /**
@@ -339,13 +357,90 @@ export class HlsPlayerService {
   }
 
   /**
+   * Validate metadata JSON structure
+   */
+  private validateMetadata(data: unknown): data is StreamMetadata {
+    if (!data || typeof data !== 'object') {
+      return false;
+    }
+
+    const d = data as Record<string, unknown>;
+
+    // Required string fields
+    const requiredStringFields = ['title', 'artist', 'album', 'date'];
+    for (const field of requiredStringFields) {
+      if (typeof d[field] !== 'string') {
+        console.warn(`[Metadata Validation] Missing or invalid field: ${field}`);
+        return false;
+      }
+    }
+
+    // Required number fields
+    if (typeof d['bit_depth'] !== 'number' || typeof d['sample_rate'] !== 'number') {
+      console.warn('[Metadata Validation] Missing or invalid bit_depth or sample_rate');
+      return false;
+    }
+
+    // Required boolean fields
+    const requiredBoolFields = ['is_new', 'is_summer', 'is_vidgames'];
+    for (const field of requiredBoolFields) {
+      if (typeof d[field] !== 'boolean') {
+        console.warn(`[Metadata Validation] Missing or invalid field: ${field}`);
+        return false;
+      }
+    }
+
+    // Previous track fields (all strings)
+    const prevFields = [
+      'prev_title_1', 'prev_artist_1',
+      'prev_title_2', 'prev_artist_2',
+      'prev_title_3', 'prev_artist_3',
+      'prev_title_4', 'prev_artist_4',
+      'prev_title_5', 'prev_artist_5'
+    ];
+    for (const field of prevFields) {
+      if (typeof d[field] !== 'string') {
+        console.warn(`[Metadata Validation] Missing or invalid field: ${field}`);
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  /**
    * Fetch track metadata from the JSON endpoint
    */
   private async fetchMetadata(): Promise<void> {
+    // Abort any in-flight request to prevent race conditions
+    if (this.metadataAbortController) {
+      this.metadataAbortController.abort();
+    }
+
+    this.metadataAbortController = new AbortController();
+    const signal = this.metadataAbortController.signal;
+
     try {
-      const response = await fetch(METADATA_URL, { cache: 'no-store' });
-      if (!response.ok) return;
-      const data: StreamMetadata = await response.json();
+      const response = await fetch(METADATA_URL, { cache: 'no-store', signal });
+      if (!response.ok) {
+        this.metadataFailureCount++;
+        this.handleMetadataFailure();
+        return;
+      }
+      const rawData = await response.json();
+
+      // Validate metadata structure before using it
+      if (!this.validateMetadata(rawData)) {
+        console.error('[HlsPlayerService] Invalid metadata schema received');
+        this.metadataFailureCount++;
+        this.handleMetadataFailure();
+        return;
+      }
+
+      const data: StreamMetadata = rawData;
+
+      // Reset failure count on success
+      this.metadataFailureCount = 0;
 
       const current = this._currentTrack();
       const trackChanged =
@@ -392,11 +487,46 @@ export class HlsPlayerService {
       }
       this._recentlyPlayed.set(recentTracks);
     } catch (e) {
+      // Ignore AbortError (expected when aborting previous requests)
+      if (e instanceof Error && e.name === 'AbortError') {
+        return;
+      }
+
+      this.metadataFailureCount++;
       this.errorMonitoring.trackNetworkError(
         'Failed to fetch track metadata',
         METADATA_URL
       );
+      this.handleMetadataFailure();
     }
+  }
+
+  /**
+   * Handle metadata fetch failures with exponential backoff
+   */
+  private handleMetadataFailure(): void {
+    if (this.metadataFailureCount >= this.MAX_METADATA_FAILURES) {
+      // Stop polling after max failures and notify via status
+      if (this.metadataIntervalId !== null) {
+        clearInterval(this.metadataIntervalId);
+        this.metadataIntervalId = null;
+      }
+      this._statusMessage.set('Unable to fetch track info');
+      console.error('Metadata polling stopped after', this.MAX_METADATA_FAILURES, 'consecutive failures');
+      return;
+    }
+
+    // Exponential backoff: 10s, 20s, 40s, 80s
+    const backoffMultiplier = Math.pow(2, this.metadataFailureCount - 1);
+    const backoffDelay = METADATA_POLL_INTERVAL * backoffMultiplier;
+
+    console.warn(`Metadata fetch failed (${this.metadataFailureCount}/${this.MAX_METADATA_FAILURES}). Retrying in ${backoffDelay / 1000}s...`);
+
+    // Clear current interval and start new one with backoff delay
+    if (this.metadataIntervalId !== null) {
+      clearInterval(this.metadataIntervalId);
+    }
+    this.metadataIntervalId = setInterval(() => this.fetchMetadata(), backoffDelay);
   }
 
   /**
@@ -462,6 +592,7 @@ export class HlsPlayerService {
    * Cleanup resources
    */
   destroy(): void {
+    // Clear intervals
     if (this.metadataIntervalId !== null) {
       clearInterval(this.metadataIntervalId);
       this.metadataIntervalId = null;
@@ -470,10 +601,56 @@ export class HlsPlayerService {
       clearInterval(this.bufferCheckIntervalId);
       this.bufferCheckIntervalId = null;
     }
+
+    // Abort in-flight metadata fetch
+    if (this.metadataAbortController) {
+      this.metadataAbortController.abort();
+      this.metadataAbortController = null;
+    }
+
+    // Reset failure count
+    this.metadataFailureCount = 0;
+
+    // Clear recovering error IDs
+    this.recoveringErrorIds.clear();
+
+    // Remove audio element event listeners
+    if (this.audioElement) {
+      // Clone and replace to remove all event listeners efficiently
+      const newAudioElement = this.audioElement.cloneNode(true) as HTMLAudioElement;
+      this.audioElement.parentNode?.replaceChild(newAudioElement, this.audioElement);
+    }
+
+    // Clear Media Session handlers
+    if ('mediaSession' in navigator) {
+      try {
+        navigator.mediaSession.setActionHandler('play', null);
+        navigator.mediaSession.setActionHandler('pause', null);
+        navigator.mediaSession.setActionHandler('stop', null);
+      } catch (e) {
+        // Ignore errors when clearing handlers
+      }
+    }
+
+    // Destroy HLS instance
     if (this.hls) {
       this.hls.destroy();
       this.hls = null;
     }
+
     this.audioElement = null;
+
+    // Reset all signals to initial state
+    this._isPlaying.set(false);
+    // Note: Do NOT reset _volume - it's persisted in preferences
+    this._status.set('initializing');
+    this._statusMessage.set('Initializing...');
+    this._errorMessage.set('');
+    this._currentTrack.set(null);
+    this._recentlyPlayed.set([]);
+    this._coverUrl.set(null);
+    this._bufferHealth.set(0);
+    this._bitrate.set(0);
+    this._fragmentLatency.set(0);
   }
 }

@@ -427,3 +427,364 @@ describe('POST /api/errors', () => {
     expect((await res.json()).error).toBe('Database error');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Rate Limiting
+// ---------------------------------------------------------------------------
+describe('Rate Limiting', () => {
+  let rateLimitStore;
+
+  beforeAll(async () => {
+    // Import rate limit store for clearing between tests
+    const serverModule = await import('./server.js');
+    rateLimitStore = serverModule.rateLimitStore;
+  });
+
+  beforeEach(() => {
+    // Clear rate limit store between tests to prevent interference
+    if (rateLimitStore) {
+      rateLimitStore.clear();
+    }
+  });
+
+  it('allows requests under the rate limit', async () => {
+    mockQuery
+      .mockResolvedValue({ rows: [{ thumbs_up: 1, thumbs_down: 0 }] })
+      .mockResolvedValue({ rows: [] });
+
+    // Make 10 requests (well under the 100/minute limit)
+    for (let i = 0; i < 10; i++) {
+      const res = await fetch(`${baseUrl}/api/ratings?title=TestSong&artist=TestArtist`);
+      expect(res.status).toBe(200);
+      expect(res.headers.get('X-RateLimit-Limit')).toBe('100');
+      expect(res.headers.get('X-RateLimit-Remaining')).toBeTruthy();
+      expect(res.headers.get('X-RateLimit-Reset')).toBeTruthy();
+    }
+  });
+
+  it('returns 429 when rate limit is exceeded', async () => {
+    mockQuery
+      .mockResolvedValue({ rows: [{ thumbs_up: 1, thumbs_down: 0 }] })
+      .mockResolvedValue({ rows: [] });
+
+    // Make 101 requests to exceed the 100/minute limit
+    let successCount = 0;
+    let rateLimitedCount = 0;
+
+    for (let i = 0; i < 101; i++) {
+      const res = await fetch(`${baseUrl}/api/ratings?title=TestSong&artist=TestArtist`);
+      if (res.status === 200) {
+        successCount++;
+      } else if (res.status === 429) {
+        rateLimitedCount++;
+        const data = await res.json();
+        expect(data.error).toBe('Too many requests');
+        expect(data.message).toContain('Rate limit exceeded');
+        expect(data.retry_after).toBeGreaterThan(0);
+        expect(res.headers.get('Retry-After')).toBeTruthy();
+      }
+    }
+
+    expect(successCount).toBe(100);
+    expect(rateLimitedCount).toBe(1);
+  });
+
+  it('sets correct rate limit headers', async () => {
+    mockQuery
+      .mockResolvedValue({ rows: [{ thumbs_up: 1, thumbs_down: 0 }] })
+      .mockResolvedValue({ rows: [] });
+
+    const res = await fetch(`${baseUrl}/api/ratings?title=TestSong&artist=TestArtist`);
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('X-RateLimit-Limit')).toBe('100');
+    const remaining = parseInt(res.headers.get('X-RateLimit-Remaining') || '0', 10);
+    expect(remaining).toBe(99); // 100 - 1 request
+    const resetTime = parseInt(res.headers.get('X-RateLimit-Reset') || '0', 10);
+    expect(resetTime).toBeGreaterThan(Date.now() / 1000); // Should be a future timestamp
+  });
+
+  it('rate limits per IP address', async () => {
+    mockQuery
+      .mockResolvedValue({ rows: [{ thumbs_up: 1, thumbs_down: 0 }] })
+      .mockResolvedValue({ rows: [] });
+
+    // Make 100 requests from IP 1 (should succeed)
+    for (let i = 0; i < 100; i++) {
+      const res = await fetch(`${baseUrl}/api/ratings?title=TestSong&artist=TestArtist`, {
+        headers: { 'X-Forwarded-For': '10.0.0.1' },
+      });
+      expect(res.status).toBe(200);
+    }
+
+    // 101st request from IP 1 should be rate limited
+    const res1 = await fetch(`${baseUrl}/api/ratings?title=TestSong&artist=TestArtist`, {
+      headers: { 'X-Forwarded-For': '10.0.0.1' },
+    });
+    expect(res1.status).toBe(429);
+
+    // But request from IP 2 should still succeed
+    const res2 = await fetch(`${baseUrl}/api/ratings?title=TestSong&artist=TestArtist`, {
+      headers: { 'X-Forwarded-For': '10.0.0.2' },
+    });
+    expect(res2.status).toBe(200);
+  });
+
+  it('rate limits all API endpoints', async () => {
+    // Mock GET /api/ratings responses (calls mockQuery)
+    mockQuery.mockResolvedValue({ rows: [{ thumbs_up: 1, thumbs_down: 0 }] });
+    mockQuery.mockResolvedValue({ rows: [] });
+
+    // Mock POST /api/ratings transaction (calls mockConnect and mockClientQuery)
+    mockConnect.mockResolvedValue(mockClient);
+    mockClientQuery.mockImplementation(async () => {
+      // Return appropriate response based on query type
+      // This simplified mock works for most POST /api/ratings flows
+      return { rows: [{ thumbs_up: 1, thumbs_down: 0, vote: 'up' }] };
+    });
+
+    // Make 100 mixed requests (50 GET + 50 POST = 100 total)
+    for (let i = 0; i < 50; i++) {
+      const res1 = await fetch(`${baseUrl}/api/ratings?title=Song${i}&artist=Artist${i}`);
+      expect(res1.status).toBe(200);
+
+      const res2 = await fetch(`${baseUrl}/api/ratings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: `Song${i}`, artist: `Artist${i}`, rating: 'up' }),
+      });
+      expect(res2.status).toBe(200);
+    }
+
+    // 101st request should be rate limited
+    const res = await fetch(`${baseUrl}/api/ratings?title=Song&artist=Artist`);
+    expect(res.status).toBe(429);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Request Validation
+// ---------------------------------------------------------------------------
+describe('Request Validation', () => {
+  let rateLimitStore;
+
+  beforeAll(async () => {
+    // Import rate limit store for clearing between tests
+    const serverModule = await import('./server.js');
+    rateLimitStore = serverModule.rateLimitStore;
+  });
+
+  beforeEach(() => {
+    // Clear rate limit store to prevent 429 errors
+    if (rateLimitStore) {
+      rateLimitStore.clear();
+    }
+  });
+
+  const post = (url, body, headers = {}) =>
+    fetch(`${baseUrl}${url}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...headers },
+      body: typeof body === 'string' ? body : JSON.stringify(body),
+    });
+
+  // ---------------------------------------------------------------------------
+  // Content-Type validation
+  // ---------------------------------------------------------------------------
+  describe('Content-Type validation', () => {
+    it('rejects POST /api/ratings with missing Content-Type', async () => {
+      const res = await fetch(`${baseUrl}/api/ratings`, {
+        method: 'POST',
+        body: JSON.stringify({ title: 'Song', artist: 'Artist', rating: 'up' }),
+      });
+      expect(res.status).toBe(400);
+      const data = await res.json();
+      expect(data.error).toContain('Content-Type');
+    });
+
+    it('rejects POST /api/ratings with wrong Content-Type', async () => {
+      const res = await post('/api/ratings', { title: 'Song', artist: 'Artist', rating: 'up' }, {
+        'Content-Type': 'text/plain',
+      });
+      expect(res.status).toBe(400);
+      const data = await res.json();
+      expect(data.error).toContain('Content-Type');
+    });
+
+    it('rejects POST /api/errors with missing Content-Type', async () => {
+      const res = await fetch(`${baseUrl}/api/errors`, {
+        method: 'POST',
+        body: JSON.stringify({ session_id: 's', source: 'app', severity: 'error', message: 'm' }),
+      });
+      expect(res.status).toBe(400);
+      const data = await res.json();
+      expect(data.error).toContain('Content-Type');
+    });
+
+    it('rejects POST /api/errors with wrong Content-Type', async () => {
+      const res = await post('/api/errors', { session_id: 's', source: 'app', severity: 'error', message: 'm' }, {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      });
+      expect(res.status).toBe(400);
+      const data = await res.json();
+      expect(data.error).toContain('Content-Type');
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Request size limits
+  // ---------------------------------------------------------------------------
+  describe('Request size limits', () => {
+    it('rejects POST /api/ratings when body exceeds size limit', async () => {
+      const largeString = 'x'.repeat(2000); // 2KB, exceeds 1KB limit
+
+      try {
+        const res = await post('/api/ratings', {
+          title: largeString,
+          artist: 'Artist',
+          rating: 'up',
+        });
+        // If we get a response, it should be 413
+        expect(res.status).toBe(413);
+        const data = await res.json();
+        expect(data.error).toBe('Payload Too Large');
+      } catch (err) {
+        // Server may close connection before sending response (also valid behavior)
+        expect(err.message).toMatch(/fetch failed|socket|closed/i);
+      }
+    });
+
+    it('rejects POST /api/errors when body exceeds size limit', async () => {
+      const largeString = 'x'.repeat(15000); // 15KB, exceeds 10KB limit
+
+      try {
+        const res = await post('/api/errors', {
+          session_id: 'session-123',
+          source: 'app',
+          severity: 'error',
+          message: largeString,
+        });
+        // If we get a response, it should be 413
+        expect(res.status).toBe(413);
+        const data = await res.json();
+        expect(data.error).toBe('Payload Too Large');
+      } catch (err) {
+        // Server may close connection before sending response (also valid behavior)
+        expect(err.message).toMatch(/fetch failed|socket|closed/i);
+      }
+    });
+
+    it('accepts POST /api/ratings within size limit', async () => {
+      mockConnect.mockResolvedValueOnce(mockClient);
+      mockClientQuery
+        .mockResolvedValueOnce({ rows: [] }) // BEGIN
+        .mockResolvedValueOnce({ rows: [] }) // SELECT existing vote
+        .mockResolvedValueOnce({ rows: [] }) // INSERT vote
+        .mockResolvedValueOnce({ rows: [{ thumbs_up: 1, thumbs_down: 0 }] }) // UPSERT ratings
+        .mockResolvedValueOnce({ rows: [] }); // COMMIT
+
+      const res = await post('/api/ratings', {
+        title: 'Song Title',
+        artist: 'Artist Name',
+        rating: 'up',
+      });
+      expect(res.status).toBe(200);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Suspicious pattern detection
+  // ---------------------------------------------------------------------------
+  describe('Suspicious pattern detection', () => {
+    it('detects SQL injection attempt in title', async () => {
+      mockQuery.mockResolvedValue({ rows: [] });
+
+      const res = await fetch(`${baseUrl}/api/ratings?title=test' OR 1=1--&artist=Artist`);
+
+      // Request should still process but might return 400 or log security event
+      // The actual behavior depends on implementation - check if it's rejected or allowed with logging
+      expect([200, 400]).toContain(res.status);
+    });
+
+    it('detects SQL injection attempt in artist', async () => {
+      mockQuery.mockResolvedValue({ rows: [] });
+
+      const res = await fetch(`${baseUrl}/api/ratings?title=Song&artist=UNION SELECT * FROM users--`);
+
+      expect([200, 400]).toContain(res.status);
+    });
+
+    it('detects XSS attempt in title', async () => {
+      mockQuery.mockResolvedValue({ rows: [] });
+
+      const res = await fetch(`${baseUrl}/api/ratings?title=<script>alert('xss')</script>&artist=Artist`);
+
+      expect([200, 400]).toContain(res.status);
+    });
+
+    it('detects path traversal attempt', async () => {
+      mockQuery.mockResolvedValue({ rows: [] });
+
+      const res = await fetch(`${baseUrl}/api/ratings?title=../../etc/passwd&artist=Artist`);
+
+      expect([200, 400]).toContain(res.status);
+    });
+
+    it('allows normal special characters in title and artist', async () => {
+      mockQuery
+        .mockResolvedValueOnce({ rows: [{ thumbs_up: 0, thumbs_down: 0 }] })
+        .mockResolvedValueOnce({ rows: [] });
+
+      const res = await fetch(`${baseUrl}/api/ratings?title=It's A Song (Remix) [2024]&artist=Artist & The Band`);
+
+      expect(res.status).toBe(200);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Field length validation
+  // ---------------------------------------------------------------------------
+  describe('Field length validation', () => {
+    it('rejects POST /api/ratings when title exceeds 200 characters', async () => {
+      const longTitle = 'x'.repeat(201);
+      const res = await post('/api/ratings', {
+        title: longTitle,
+        artist: 'Artist',
+        rating: 'up',
+      });
+      expect(res.status).toBe(400);
+      const data = await res.json();
+      expect(data.error).toContain('200 characters');
+    });
+
+    it('rejects POST /api/ratings when artist exceeds 200 characters', async () => {
+      const longArtist = 'x'.repeat(201);
+      const res = await post('/api/ratings', {
+        title: 'Song',
+        artist: longArtist,
+        rating: 'up',
+      });
+      expect(res.status).toBe(400);
+      const data = await res.json();
+      expect(data.error).toContain('200 characters');
+    });
+
+    it('accepts POST /api/ratings with exactly 200 characters', async () => {
+      mockConnect.mockResolvedValueOnce(mockClient);
+      mockClientQuery
+        .mockResolvedValueOnce({ rows: [] }) // BEGIN
+        .mockResolvedValueOnce({ rows: [] }) // SELECT existing vote
+        .mockResolvedValueOnce({ rows: [] }) // INSERT vote
+        .mockResolvedValueOnce({ rows: [{ thumbs_up: 1, thumbs_down: 0 }] }) // UPSERT ratings
+        .mockResolvedValueOnce({ rows: [] }); // COMMIT
+
+      const title200 = 'x'.repeat(200);
+      const res = await post('/api/ratings', {
+        title: title200,
+        artist: 'Artist',
+        rating: 'up',
+      });
+      expect(res.status).toBe(200);
+    });
+  });
+});

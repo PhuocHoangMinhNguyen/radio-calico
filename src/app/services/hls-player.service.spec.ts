@@ -130,7 +130,10 @@ describe('HlsPlayerService', () => {
       await vi.waitFor(() => {
         expect(fetchSpy).toHaveBeenCalledWith(
           'https://d3d4yli4hf5bmh.cloudfront.net/metadatav2.json',
-          { cache: 'no-store' }
+          expect.objectContaining({
+            cache: 'no-store',
+            signal: expect.any(AbortSignal)
+          })
         );
         expect(service.currentTrack()?.title).toBe('Test Song');
       });
@@ -483,6 +486,50 @@ describe('HlsPlayerService', () => {
       (service as any)._fragmentLatency.set(1500);
 
       expect(service.connectionQuality()).toBe('poor');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Lifecycle and cleanup tests
+  // -------------------------------------------------------------------------
+  describe('lifecycle and cleanup', () => {
+    it('destroy can be called before initialization', () => {
+      expect(() => service.destroy()).not.toThrow();
+    });
+
+    it('destroy can be called multiple times safely', () => {
+      const audioElement = document.createElement('audio');
+      const mockHlsIsSupported = vi.fn(() => false);
+      vi.stubGlobal('Hls', { isSupported: mockHlsIsSupported });
+
+      service.initializePlayer(audioElement, 'test-stream.m3u8');
+
+      expect(() => {
+        service.destroy();
+        service.destroy();
+        service.destroy();
+      }).not.toThrow();
+    });
+
+    it('signals remain in safe state after destroy', () => {
+      service.destroy();
+
+      // Core signals should be in safe state
+      expect(service.isPlaying()).toBe(false);
+      expect(service.status()).toBe('initializing');
+    });
+
+    it('handles empty stream URL gracefully', () => {
+      const mockHlsIsSupported = vi.fn(() => false);
+      vi.stubGlobal('Hls', { isSupported: mockHlsIsSupported });
+
+      const audioElement = document.createElement('audio');
+
+      expect(() => {
+        service.initializePlayer(audioElement, '');
+      }).not.toThrow();
+
+      service.destroy();
     });
   });
 });

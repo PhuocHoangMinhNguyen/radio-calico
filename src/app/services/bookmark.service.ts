@@ -26,13 +26,6 @@ export class BookmarkService {
   }
 
   /**
-   * Computed signal to check if current track is bookmarked
-   */
-  isTrackBookmarked(title: string, artist: string) {
-    return computed(() => this.isBookmarked(title, artist));
-  }
-
-  /**
    * Toggle bookmark status for a track
    */
   toggle(title: string, artist: string): boolean {
@@ -57,6 +50,8 @@ export class BookmarkService {
       savedAt: Date.now(),
     };
 
+    const previousBookmarks = this._bookmarks();
+
     this._bookmarks.update((bookmarks) => {
       const updated = [newBookmark, ...bookmarks];
       // Limit to MAX_BOOKMARKS
@@ -66,7 +61,12 @@ export class BookmarkService {
       return updated;
     });
 
-    this.saveToStorage();
+    // Try to save and revert if it fails
+    if (!this.saveToStorage()) {
+      // Revert to previous state on failure
+      this._bookmarks.set(previousBookmarks);
+      this.showQuotaExceededNotification();
+    }
   }
 
   /**
@@ -99,11 +99,29 @@ export class BookmarkService {
     return [];
   }
 
-  private saveToStorage(): void {
+  private saveToStorage(): boolean {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(this._bookmarks()));
+      return true;
     } catch (e) {
-      console.warn('[BookmarkService] Failed to save bookmarks:', e);
+      console.error('[BookmarkService] Failed to save bookmarks:', e);
+      return false;
+    }
+  }
+
+  private showQuotaExceededNotification(): void {
+    // Show user-visible notification about quota exceeded
+    // In a real app, this would use a toast/snackbar service
+    console.error(
+      '[BookmarkService] localStorage quota exceeded. Unable to save bookmark. Please clear some bookmarks or browser data.'
+    );
+
+    // You could also dispatch an event or use a notification service here
+    if ('Notification' in window && Notification.permission === 'granted') {
+      new Notification('Bookmark Failed', {
+        body: 'Unable to save bookmark. Storage quota exceeded.',
+        icon: '/favicon.ico',
+      });
     }
   }
 }

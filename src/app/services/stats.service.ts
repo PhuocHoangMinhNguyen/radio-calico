@@ -1,4 +1,4 @@
-import { Injectable, inject, signal, computed, effect } from '@angular/core';
+import { Injectable, inject, signal, computed, effect, OnDestroy } from '@angular/core';
 import { HlsPlayerService } from './hls-player.service';
 
 const STORAGE_KEY = 'radio-calico-stats';
@@ -14,7 +14,7 @@ const DEFAULT_STATS: ListeningStats = {
 };
 
 @Injectable({ providedIn: 'root' })
-export class StatsService {
+export class StatsService implements OnDestroy {
   private readonly hlsService = inject(HlsPlayerService);
 
   private _totalSeconds = signal<number>(0);
@@ -103,8 +103,8 @@ export class StatsService {
     this.intervalId = setInterval(() => {
       this._totalSeconds.update((s) => s + 1);
 
-      // Save every 10 seconds to reduce writes
-      if (this._totalSeconds() % 10 === 0) {
+      // Save every 30 seconds to reduce writes
+      if (this._totalSeconds() % 30 === 0) {
         this.saveStats();
       }
     }, 1000);
@@ -130,5 +130,12 @@ export class StatsService {
     if (this.hlsService.isPlaying()) {
       this.startTracking();
     }
+  }
+
+  /**
+   * Cleanup resources on service destruction
+   */
+  ngOnDestroy(): void {
+    this.stopTracking();
   }
 }

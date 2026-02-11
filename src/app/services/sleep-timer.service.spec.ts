@@ -224,4 +224,173 @@ describe('SleepTimerService', () => {
       expect(service.progress()).toBe(0);
     });
   });
+
+  // -------------------------------------------------------------------------
+  // Edge cases
+  // -------------------------------------------------------------------------
+  describe('edge cases', () => {
+    it('handles 0 seconds scenario when starting with 0 minutes (if somehow passed)', () => {
+      // TypeScript prevents this at compile time, but test runtime behavior
+      // @ts-expect-error Testing invalid input
+      service.start(0);
+
+      // Should set remaining to 0 (0 * 60)
+      expect(service.remainingSeconds()).toBe(0);
+      expect(service.isActive()).toBe(true);
+
+      // Timer should complete immediately on first tick
+      vi.advanceTimersByTime(1000);
+      expect(service.isActive()).toBe(false);
+      expect(mockHlsService.pause).toHaveBeenCalledOnce();
+    });
+
+    it('handles rapid start/cancel sequences', () => {
+      service.start(15);
+      expect(service.isActive()).toBe(true);
+
+      service.cancel();
+      expect(service.isActive()).toBe(false);
+
+      service.start(30);
+      expect(service.isActive()).toBe(true);
+      expect(service.selectedDuration()).toBe(30);
+
+      service.cancel();
+      expect(service.isActive()).toBe(false);
+
+      service.start(60);
+      expect(service.isActive()).toBe(true);
+      expect(service.selectedDuration()).toBe(60);
+
+      // No errors, state is consistent
+      expect(mockHlsService.pause).not.toHaveBeenCalled();
+    });
+
+    it('handles canceling immediately after starting', () => {
+      service.start(15);
+      service.cancel();
+
+      expect(service.isActive()).toBe(false);
+      expect(service.remainingSeconds()).toBe(0);
+      expect(service.selectedDuration()).toBeNull();
+
+      // Should not pause or throw
+      expect(mockHlsService.pause).not.toHaveBeenCalled();
+      expect(() => vi.advanceTimersByTime(10_000)).not.toThrow();
+    });
+
+    it('handles multiple rapid starts without explicit cancel', () => {
+      service.start(15);
+      const firstRemaining = service.remainingSeconds();
+
+      // Start again immediately (should auto-cancel previous)
+      service.start(30);
+      expect(service.selectedDuration()).toBe(30);
+      expect(service.remainingSeconds()).toBe(30 * 60);
+      expect(service.remainingSeconds()).not.toBe(firstRemaining);
+
+      // And again
+      service.start(60);
+      expect(service.selectedDuration()).toBe(60);
+      expect(service.remainingSeconds()).toBe(60 * 60);
+
+      // Only one timer should be running
+      vi.advanceTimersByTime(5000);
+      expect(service.remainingSeconds()).toBe(60 * 60 - 5);
+    });
+
+    it('handles starting when already active with same duration', () => {
+      service.start(15);
+      vi.advanceTimersByTime(30_000); // 30 seconds elapsed
+      expect(service.remainingSeconds()).toBe(15 * 60 - 30);
+
+      // Restart with same duration - should reset to full duration
+      service.start(15);
+      expect(service.remainingSeconds()).toBe(15 * 60);
+      expect(service.isActive()).toBe(true);
+    });
+
+    it('handles rapid toggle calls', () => {
+      service.toggle(15); // Start
+      expect(service.isActive()).toBe(true);
+
+      service.toggle(15); // Cancel
+      expect(service.isActive()).toBe(false);
+
+      service.toggle(15); // Start again
+      expect(service.isActive()).toBe(true);
+
+      service.toggle(15); // Cancel again
+      expect(service.isActive()).toBe(false);
+
+      // Should be stable
+      expect(service.remainingSeconds()).toBe(0);
+      expect(service.selectedDuration()).toBeNull();
+    });
+
+    it('handles pause error gracefully on timer completion', () => {
+      // Make pause throw an error
+      mockHlsService.pause.mockImplementationOnce(() => {
+        throw new Error('Player not initialized');
+      });
+
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      service.start(1);
+      vi.advanceTimersByTime(60_000);
+
+      // Should not throw, timer should be cancelled
+      expect(service.isActive()).toBe(false);
+      expect(service.remainingSeconds()).toBe(0);
+      expect(consoleSpy).toHaveBeenCalledWith(
+        'Sleep timer failed to pause playback:',
+        expect.any(Error)
+      );
+
+      consoleSpy.mockRestore();
+    });
+
+    it('handles timer completion with multiple intervals queued', () => {
+      service.start(1);
+
+      // Advance past completion in one big jump
+      vi.advanceTimersByTime(100_000); // Way past 60 seconds
+
+      // Should only pause once, not multiple times
+      expect(mockHlsService.pause).toHaveBeenCalledOnce();
+      expect(service.isActive()).toBe(false);
+    });
+
+    it('maintains state consistency after cancel during countdown', () => {
+      service.start(15);
+      vi.advanceTimersByTime(5000); // 5 seconds elapsed
+
+      const beforeCancel = service.remainingSeconds();
+      expect(beforeCancel).toBe(15 * 60 - 5);
+
+      service.cancel();
+
+      // State should be fully reset
+      expect(service.isActive()).toBe(false);
+      expect(service.remainingSeconds()).toBe(0);
+      expect(service.selectedDuration()).toBeNull();
+      expect(service.formattedTime()).toBe('');
+      expect(service.progress()).toBe(0);
+    });
+
+    it('handles negative minutes input (if somehow passed)', () => {
+      // TypeScript prevents this, but test runtime behavior
+      // @ts-expect-error Testing invalid input
+      service.start(-5);
+
+      // Should set to negative seconds (-300)
+      expect(service.remainingSeconds()).toBe(-300);
+      expect(service.isActive()).toBe(true);
+
+      // Timer should complete on first tick (remaining <= 1)
+      vi.advanceTimersByTime(1000);
+      expect(service.isActive()).toBe(false);
+      expect(mockHlsService.pause).toHaveBeenCalledOnce();
+    });
+  });
 });

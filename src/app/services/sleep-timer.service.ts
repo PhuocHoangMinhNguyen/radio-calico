@@ -102,6 +102,13 @@ export class SleepTimerService {
    */
   private onTimerComplete(): void {
     this.cancel();
-    this.hlsService.pause();
+
+    try {
+      this.hlsService.pause();
+    } catch (error) {
+      // If pause fails, log the error but don't crash
+      // Timer state is already cleared by cancel()
+      console.error('Sleep timer failed to pause playback:', error);
+    }
   }
 }

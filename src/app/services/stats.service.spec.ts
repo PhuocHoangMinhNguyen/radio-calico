@@ -186,19 +186,19 @@ describe('StatsService', () => {
       expect(service.totalSeconds()).toBe(5); // Accumulated
     });
 
-    it('saves to localStorage every 10 seconds while playing', () => {
+    it('saves to localStorage every 30 seconds while playing', () => {
       mockIsPlayingSignal.set(true);
 
-      vi.advanceTimersByTime(9000);
+      vi.advanceTimersByTime(29000);
       expect(localStorage.getItem('radio-calico-stats')).toBeNull();
 
-      vi.advanceTimersByTime(1000); // Total 10 seconds
+      vi.advanceTimersByTime(1000); // Total 30 seconds
       const stored1 = JSON.parse(localStorage.getItem('radio-calico-stats')!);
-      expect(stored1.totalSeconds).toBe(10);
+      expect(stored1.totalSeconds).toBe(30);
 
-      vi.advanceTimersByTime(10000); // Total 20 seconds
+      vi.advanceTimersByTime(30000); // Total 60 seconds
       const stored2 = JSON.parse(localStorage.getItem('radio-calico-stats')!);
-      expect(stored2.totalSeconds).toBe(20);
+      expect(stored2.totalSeconds).toBe(60);
     });
 
     it('persists accumulated time to localStorage', () => {

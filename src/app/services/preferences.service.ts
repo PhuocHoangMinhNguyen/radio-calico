@@ -26,6 +26,9 @@ export class PreferencesService {
   private _theme = signal<'dark' | 'light'>(DEFAULT_PREFERENCES.theme);
   private _notificationsEnabled = signal<boolean>(DEFAULT_PREFERENCES.notificationsEnabled);
 
+  // Flag to prevent effect from running during initial load
+  private isInitialLoad = true;
+
   // Public readonly signals
   readonly volume = this._volume.asReadonly();
   readonly isMuted = this._isMuted.asReadonly();
@@ -34,8 +37,10 @@ export class PreferencesService {
 
   constructor() {
     this.loadPreferences();
+    // Allow effect to run after initial load completes
+    this.isInitialLoad = false;
 
-    // Auto-save when any preference changes
+    // Auto-save when any preference changes (skip initial effect run)
     effect(() => {
       const prefs: UserPreferences = {
         volume: this._volume(),
@@ -43,7 +48,11 @@ export class PreferencesService {
         theme: this._theme(),
         notificationsEnabled: this._notificationsEnabled(),
       };
-      this.saveToStorage(prefs);
+
+      // Don't save during initial load to prevent overwriting user preferences
+      if (!this.isInitialLoad) {
+        this.saveToStorage(prefs);
+      }
     });
   }
 

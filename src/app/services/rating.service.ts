@@ -9,10 +9,13 @@ const STORAGE_PREFIX = 'rated:';
 export class RatingService {
   private _ratings = signal<SongRatings>({ thumbs_up: 0, thumbs_down: 0 });
   private _userRating = signal<'up' | 'down' | null>(null);
+  private _isPending = signal<boolean>(false);
   private _abortController: AbortController | null = null;
+  private submissionSequence = 0;
 
   readonly ratings = this._ratings.asReadonly();
   readonly userRating = this._userRating.asReadonly();
+  readonly isPending = this._isPending.asReadonly();
 
   async fetchRatings(title: string, artist: string): Promise<void> {
     // Cancel previous fetch to prevent stale responses from overwriting fresh data
@@ -52,6 +55,19 @@ export class RatingService {
       return;
     }
 
+    // Prevent concurrent submissions (guard against rapid clicks)
+    if (this._isPending()) {
+      console.warn('Rating submission already in progress, ignoring click');
+      return;
+    }
+
+    // Increment sequence number for this submission
+    this.submissionSequence++;
+    const thisSequence = this.submissionSequence;
+
+    // Set pending state to disable buttons
+    this._isPending.set(true);
+
     // Optimistically update UI
     const prevRatings = this._ratings();
     const newRatings = { ...prevRatings };
@@ -79,24 +95,43 @@ export class RatingService {
       });
       const data: SongRatings = await response.json();
 
-      // Update with server response (source of truth)
-      if (response.ok || response.status === 409) {
-        this._ratings.set({ thumbs_up: data.thumbs_up, thumbs_down: data.thumbs_down });
-        if (data.user_vote) {
-          this._userRating.set(data.user_vote);
-          localStorage.setItem(`${STORAGE_PREFIX}${title}::${artist}`, data.user_vote);
+      // Only apply response if this is still the latest submission
+      if (thisSequence === this.submissionSequence) {
+        // Update with server response (source of truth)
+        if (response.ok) {
+          this._ratings.set({ thumbs_up: data.thumbs_up, thumbs_down: data.thumbs_down });
+          if (data.user_vote) {
+            this._userRating.set(data.user_vote);
+            localStorage.setItem(`${STORAGE_PREFIX}${title}::${artist}`, data.user_vote);
+          }
         }
+      } else {
+        console.warn('Discarding out-of-order rating response');
       }
     } catch (e) {
-      // Revert on error
-      this._ratings.set(prevRatings);
-      this._userRating.set(currentRating);
-      if (currentRating) {
-        localStorage.setItem(`${STORAGE_PREFIX}${title}::${artist}`, currentRating);
-      } else {
-        localStorage.removeItem(`${STORAGE_PREFIX}${title}::${artist}`);
+      // Only revert if this is still the latest submission
+      if (thisSequence === this.submissionSequence) {
+        // Revert optimistic state
+        this._ratings.set(prevRatings);
+        this._userRating.set(currentRating);
+        if (currentRating) {
+          localStorage.setItem(`${STORAGE_PREFIX}${title}::${artist}`, currentRating);
+        } else {
+          localStorage.removeItem(`${STORAGE_PREFIX}${title}::${artist}`);
+        }
+        console.warn('Failed to submit rating:', e);
+
+        // Fetch latest ratings from server to ensure we're in sync
+        // Use setTimeout to avoid blocking the error handler
+        setTimeout(() => {
+          this.fetchRatings(title, artist);
+        }, 0);
       }
-      console.warn('Failed to submit rating:', e);
+    } finally {
+      // Only clear pending if this is still the latest submission
+      if (thisSequence === this.submissionSequence) {
+        this._isPending.set(false);
+      }
     }
   }
 
