@@ -64,13 +64,10 @@ describe('StatsService', () => {
   });
 
   it('should load stats from localStorage on initialization', () => {
-    localStorage.setItem(
-      'radio-calico-stats',
-      JSON.stringify({
-        totalSeconds: 3600,
-        lastUpdated: '2026-02-06T12:00:00Z',
-      })
-    );
+    lsStore['radio-calico-stats'] = JSON.stringify({
+      totalSeconds: 3600,
+      lastUpdated: '2026-02-06T12:00:00Z',
+    });
 
     // Reset TestBed and create fresh service to trigger loadStats
     TestBed.resetTestingModule();
@@ -87,7 +84,7 @@ describe('StatsService', () => {
   });
 
   it('should handle corrupted JSON in localStorage gracefully', () => {
-    localStorage.setItem('radio-calico-stats', '{not valid json');
+    lsStore['radio-calico-stats'] = '{not valid json';
 
     const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
@@ -365,7 +362,7 @@ describe('StatsService', () => {
   // -------------------------------------------------------------------------
   describe('error handling', () => {
     it('handles localStorage errors gracefully when loading', () => {
-      localStorage.setItem('radio-calico-stats', '{not valid json');
+      lsStore['radio-calico-stats'] = '{not valid json';
 
       const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
