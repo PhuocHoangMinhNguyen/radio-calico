@@ -180,10 +180,28 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'npm'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+          run_install: false
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
 
       - name: Install dependencies
-        run: npm ci --legacy-peer-deps
+        run: pnpm install --frozen-lockfile
 
       - name: Initialize test database
         env:
@@ -202,10 +220,10 @@ jobs:
           PGDATABASE: radio_calico
           PGUSER: postgres
           PGPASSWORD: test_password
-        run: npm run test:api
+        run: pnpm run test:api
 
       - name: Run frontend tests
-        run: npm run test:headless
+        run: pnpm run test:headless
 
       - name: Upload test results
         if: always()

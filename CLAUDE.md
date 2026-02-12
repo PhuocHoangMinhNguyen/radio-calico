@@ -93,8 +93,8 @@ docker-compose -f docker-compose.prod.yml up
 
 **For local development:**
 ```bash
-npm ci --legacy-peer-deps
-npm run dev  # Runs Angular dev server (3000) + API server (3001)
+pnpm install --frozen-lockfile
+pnpm run dev  # Runs Angular dev server (3000) + API server (3001)
 ```
 
 **Database setup** (local only):
@@ -107,57 +107,28 @@ See [Commands](#commands) section below for full details.
 
 ## Commands
 
-### Management Scripts (Recommended)
+### Management Scripts
+**PowerShell (Windows):** `.\radio-calico.ps1 [prod|dev|test|logs|clean|status]`
+**Makefile (Linux/macOS/WSL):** `make [prod|dev|test|logs|clean|status]`
+Run `help` for full command list.
 
-**For ease of use, management scripts are provided:**
-
-**PowerShell (Windows):**
-```powershell
-.\radio-calico.ps1 help         # Show all available commands
-.\radio-calico.ps1 prod         # Start production (port 8080)
-.\radio-calico.ps1 dev          # Start development
-.\radio-calico.ps1 test         # Run all tests
-.\radio-calico.ps1 status       # Show container status
-.\radio-calico.ps1 verify-all   # Verify all endpoints work
-```
-
-**Makefile (Linux/macOS/WSL/Git Bash):**
+### pnpm Commands
 ```bash
-make help           # Show all available targets
-make prod           # Start production (port 8080)
-make dev            # Start development
-make test           # Run all tests
-make status         # Show container status
-make verify-all     # Verify all endpoints work
+pnpm run dev          # Angular dev (3000) + API (3001)
+pnpm test             # Frontend tests (watch)
+pnpm run test:headless # Frontend tests (CI)
+pnpm run test:api     # Backend tests
+pnpm run test:e2e     # E2E tests (Playwright)
+pnpm run test:load    # Load tests (k6)
+pnpm run build:prod   # Production build
 ```
-
-**Common commands:**
-- **Production**: `.\radio-calico.ps1 prod` or `make prod` — Start nginx production environment on port 8080
-- **Development**: `.\radio-calico.ps1 dev` or `make dev` — Start Angular dev server + API server
-- **Testing**: `.\radio-calico.ps1 test` or `make test` — Run frontend and backend tests
-- **Logs**: `.\radio-calico.ps1 logs` or `make logs` — View all container logs
-- **Clean**: `.\radio-calico.ps1 clean` or `make clean` — Stop and remove all containers
-
-See `.\radio-calico.ps1 help` or `make help` for full command list.
-
-### npm Commands (Local Development)
-- `npm run dev` — **Primary dev workflow.** Runs both the Angular dev server (port 3000) and the API server (port 3001) concurrently via `concurrently`. The Angular proxy (`proxy.conf.json`) forwards `/api/*` requests to the Node server.
-- `npm start` — Angular dev server only (port 3000, with proxy). Use if the API server is already running.
-- `npm run start:api` — Node API server only (port 3001). Use if the Angular dev server is already running.
-- `npm run build:prod` — Production build (outputs to `dist/radio-calico/browser/`)
-- `npm run serve:prod` — Build + run production server (single server on port 3000 that serves both static files and API)
-- `npm test` — Frontend unit tests via Vitest (watch mode)
-- `npm run test:headless` — Frontend tests, single run (CI-friendly)
-- `npm run test:api` — Backend tests only (runs server.test.js via Vitest 3.x)
-- `npx vitest run src/app/services/bookmark.service.spec.ts` — Run a single test file
 
 ### Docker Commands
-- `docker-compose up` — Start development environment (Angular dev server, API server, PostgreSQL)
-- `docker-compose --profile tools up` — Start dev environment with Adminer database UI (http://localhost:8080)
-- `docker-compose -f docker-compose.prod.yml up` — Start production environment (optimized build)
-- `docker-compose down` — Stop and remove containers
-- `docker-compose run --rm app npm run test:api` — Run backend tests in Docker
-- `docker-compose run --rm app npm run test:headless` — Run frontend tests in Docker
+```bash
+docker-compose up                              # Development
+docker-compose -f docker-compose.prod.yml up   # Production
+docker-compose --profile tools up              # Dev + Adminer UI
+```
 
 ## Architecture
 
@@ -230,9 +201,9 @@ PGPASSWORD=<password> psql -U postgres -d radio_calico -f db/init.sql
   - **Metadata:** `metadata` column stores JSONB for flexible error context
 
 **Server modes:**
-- **Dev mode** (`npm run dev`) — Node server on port 3001, API only (Angular dev server handles static files on port 3000)
+- **Dev mode** (`pnpm run dev`) — Node server on port 3001, API only (Angular dev server handles static files on port 3000)
 - **Production with Docker** (`docker-compose -f docker-compose.prod.yml up`) — nginx on port 80 serving static files, Node backend on internal port 3001 (API only, `API_ONLY=true`)
-- **Production without Docker** (`npm run serve:prod`) — Single Node server on port 3000 serving both static files and API
+- **Production without Docker** (`pnpm run serve:prod`) — Single Node server on port 3000 serving both static files and API
 
 ## Progressive Web App (PWA)
 
@@ -248,7 +219,7 @@ The app is installable as a PWA with offline support via Angular Service Worker 
 - `ngsw-config.json` — Service Worker configuration
 - `src/manifest.webmanifest` — PWA manifest (theme colors, icons, display mode)
 
-**Important:** Service Worker is only enabled in production builds (`npm run build:prod`). Development builds do not include the service worker.
+**Important:** Service Worker is only enabled in production builds (`pnpm run build:prod`). Development builds do not include the service worker.
 
 ## nginx Configuration (Production Docker Only)
 
@@ -289,8 +260,8 @@ Client → nginx:80 → backend:3001 (Node.js API)
 ## Testing
 
 Two separate test configurations:
-- **Frontend tests** — `npm test` or `npm run test:headless` — Angular's built-in Vitest runner for `src/**/*.spec.ts`
-- **Backend tests** — `npm run test:api` — Standalone Vitest 3.x for `server.test.js`
+- **Frontend tests** — `pnpm test` or `pnpm run test:headless` — Angular's built-in Vitest runner for `src/**/*.spec.ts`
+- **Backend tests** — `pnpm run test:api` — Standalone Vitest 3.x for `server.test.js`
 
 **Important:** Backend uses Vitest 3.x (pinned in package.json) due to a Vitest 4.x Windows bug with ES modules. Frontend uses Angular's bundled Vitest (4.x). The two test runners are completely independent.
 
@@ -300,78 +271,29 @@ Two separate test configurations:
 
 ## Docker Setup
 
-The project uses multi-stage Docker builds with Alpine Linux for minimal image sizes.
+Multi-stage builds with Alpine Linux for minimal image sizes.
 
-### Dockerfile Stages (Dockerfile)
-1. **base** — Node 22 Alpine with dependencies installed (`npm ci --legacy-peer-deps`)
-2. **development** — Full source with hot-reload support, exposes ports 3000 (Angular) and 3001 (API)
-3. **builder** — Production build of Angular app (`npm run build:prod`)
-4. **production** — Minimal runtime with only prod dependencies, non-root user, API server on port 3001
+**Dockerfile stages:** base (deps) → development (hot-reload) → builder (prod build) → production (runtime)
+**Dockerfile.nginx:** nginx:alpine serving Angular SPA + reverse proxy to backend
 
-### nginx Dockerfile (Dockerfile.nginx)
-- Uses official nginx:alpine image
-- Copies built Angular files from `builder` stage
-- Copies custom `nginx.conf` for SPA routing and API proxying
-- Runs as non-root user
-- Exposes port 80
+**docker-compose.yml (dev):** app (Angular + API) + db (PostgreSQL 16) + adminer (optional, `--profile tools`)
+**docker-compose.prod.yml (prod):** nginx (static + proxy) + backend (API only, internal) + db (internal)
 
-### docker-compose.yml (Development)
-- **app** service: Angular dev server + API server with volume mounts for hot-reload
-- **db** service: PostgreSQL 16 with auto-initialization from `db/init.sql`
-- **adminer** service (optional, `--profile tools`): Database management UI on port 8080
-- Networking: All services on `radio_calico_network_dev` bridge network
-
-### docker-compose.prod.yml (Production)
-- **nginx** service: Serves Angular static files and reverse proxies `/api/*` to backend
-  - Built from `Dockerfile.nginx`
-  - Exposes port 80 (configurable via `NGINX_PORT` env var)
-  - Resource limits: 128M memory, 0.5 CPU
-  - Health check on `/health` endpoint
-- **backend** service: Node.js API server (internal only, no exposed ports)
-  - Built from `Dockerfile` (production target)
-  - Runs on internal port 3001 with `API_ONLY=true`
-  - Resource limits: 512M memory, 1.0 CPU
-  - Health check on API endpoint
-- **db** service: PostgreSQL with tighter resource limits, no exposed port (internal only)
-- All services run as non-root users with security hardening
-
-**Important Docker notes:**
-- The Dockerfile includes `--legacy-peer-deps` flag for `npm ci` to handle the intentional Vitest version mismatch
-- Development volumes exclude `node_modules` and `.angular` directories to prevent host/container conflicts
-- Production image uses `--omit=dev` to exclude dev dependencies
+**Notes:**
+- Development uses volume mounts for hot-reload
+- Production uses non-root users, resource limits, health checks
+- nginx health check: `GET /health`
+- Backend health check: `GET /api/health` (includes DB connectivity test)
 
 ## CI/CD
 
-GitHub Actions workflow (`.github/workflows/docker-build.yml`) runs on push/PR to `master` branch:
+**docker-build.yml** (push/PR to master):
+- Build job: Docker Buildx → build production + dev images → push to ghcr.io → Trivy scan
+- Test job: PostgreSQL service → pnpm install → init DB → run backend + frontend tests
 
-### Build Job
-1. Checkout code
-2. Set up Docker Buildx for multi-platform builds
-3. Log in to GitHub Container Registry (ghcr.io)
-4. Extract Docker metadata (tags, labels)
-5. Build and push production image (`target: production`)
-6. Build development image for verification (`target: development`, push: false)
-7. Uses GitHub Actions cache for layer caching
+**Images:** `ghcr.io/phuochoangminhnguyen/radio-calico:latest`
 
-### Test Job (depends on build)
-1. Start PostgreSQL 16 service container
-2. Set up Node.js 22
-3. Install dependencies (`npm ci --legacy-peer-deps`)
-4. Initialize test database from `db/init.sql`
-5. Run backend tests (`npm run test:api`)
-6. Run frontend tests (`npm run test:headless`)
-
-**Images are published to:** `ghcr.io/phuochoangminhnguyen/radio-calico:latest`
-
-**Other workflows:**
-- `.github/workflows/claude.yml` — Claude Code integration for `@claude` mentions in issues/PRs
-- `.github/workflows/claude-code-review.yml` — Automatic code review on PR creation
-- `.github/workflows/security-scan.yml` — Automated security scanning with Trivy and npm audit
-
-**Important CI/CD notes:**
-- Node.js version in CI **must** be ≥22.12 or ≥20.19 to satisfy Angular 21 requirements
-- `npm ci` requires `--legacy-peer-deps` flag due to Vitest version mismatch
-- PostgreSQL service uses health checks to ensure database is ready before tests run
+**Other workflows:** Claude integration, code review automation, security scanning (Trivy, pnpm audit, CodeQL)
 
 ## Conventions
 
@@ -453,12 +375,42 @@ Optional improvements deferred for future iterations based on user feedback and 
 4. **Database:** Use transactions, handle rollback failures, close resources in finally
 5. **Testing:** Add edge cases and error scenarios, not just happy path
 
+### Production Readiness Checklist
+
+**QA Grade: A- (Production-Ready)**
+
+| Item | Status | Details |
+|------|--------|---------|
+| 1. Database pool config | ✅ | `server.js` - max=20, timeouts configured |
+| 2. Health check endpoint | ✅ | `/api/health` with DB connectivity test |
+| 3. Error log cleanup cron | ⚠️ | SQL trigger done, manual cron setup required |
+| 4. SSL/TLS certificates | ⚠️ | nginx config ready, awaiting cert provisioning |
+| 5. Load testing | ✅ | k6 scripts ready, run `pnpm run test:load` |
+| 6. E2E tests | ✅ | 27 Playwright tests, run `pnpm run test:e2e` |
+| 7. Query timeout | ✅ | 10s statement_timeout in pool |
+| 8. Production monitoring | ✅ | Sentry integration guide + hooks in ErrorMonitoringService |
+| 9. Circuit breaker backoff | ✅ | Exponential: 60s → 120s → 240s → 480s → 600s max |
+| 10. Constants file | ✅ | `src/app/config/constants.ts` with 70+ constants |
+
+**Active Risks:**
+- ⚠️ Error log table growth if cron not configured
+- ⚠️ Load test scripts ready but not executed
+- ⚠️ HLS.js memory leaks on 24h+ playback untested
+
+**Pre-Deployment:**
+- [ ] Run tests: `pnpm run test:api && pnpm run test:headless && pnpm run test:e2e`
+- [ ] Verify `/api/health` works
+- [ ] Schedule error log cleanup cron job
+- [ ] Provision SSL certificates
+- [ ] Smoke test: play stream, vote, bookmark, test rate limits (101 requests)
+- [ ] Monitor first 24h: error_logs table, pool usage, memory, metadata polling
+
 ## Security Roadmap
 
 ### Current Security Posture
 
 **✅ Implemented:**
-- npm audit integration with automated weekly scans
+- pnpm audit integration with automated weekly scans
 - Security job in CI/CD (fails on critical vulnerabilities)
 - nginx security headers (X-Content-Type-Options, X-Frame-Options, X-XSS-Protection, Referrer-Policy, X-DNS-Prefetch-Control)
 - Non-root user in Docker containers
@@ -506,326 +458,45 @@ All items from the original security roadmap have been implemented. Future secur
 - Review and update this roadmap quarterly
 - Consider security implications for all new features and changes
 
-### Security Feature Configuration
+### Security Features Quick Reference
 
-#### API Rate Limiting
+**Rate Limiting:** 100 req/min per IP on all `/api/*` endpoints. Customize in `server.js` (`RATE_LIMIT_WINDOW_MS`, `RATE_LIMIT_MAX_REQUESTS`). Test: `for i in {1..101}; do curl http://localhost:3001/api/ratings?title=test&artist=test; done`
 
-Rate limiting is automatically enabled for all `/api/*` endpoints in `server.js`. Configuration:
+**HTTPS/TLS:** Pre-configured in `nginx.conf`, uncomment HTTPS block after provisioning certs. Use Let's Encrypt: `certbot --nginx -d yourdomain.com`
 
-**Default settings:**
-- **Window:** 60 seconds (1 minute)
-- **Max requests:** 100 per IP per window
-- **Headers returned:** `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`, `Retry-After` (on 429)
+**CodeQL:** Auto-runs on push/PR/weekly. Results in GitHub Security tab.
 
-**To customize:**
-Edit constants in `server.js`:
-```javascript
-const RATE_LIMIT_WINDOW_MS = 60 * 1000;    // Change window duration
-const RATE_LIMIT_MAX_REQUESTS = 100;       // Change max requests
-```
+**Trivy:** Auto-scans Docker images. Manual: `docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image radio-calico:latest`
 
-**Testing rate limits:**
-```bash
-# Send 101 requests in rapid succession
-for i in {1..101}; do curl http://localhost:3001/api/ratings?title=test&artist=test; done
-```
+**CSP:** Auto-applied via nginx. Restricts resources to self + whitelisted domains.
 
-#### HTTPS/TLS Setup
+**Request Validation:** Size limits (1MB general, 10KB errors, 1KB ratings), content-type validation, SQL/XSS pattern detection in `server.js`.
 
-HTTPS configuration is pre-configured in `nginx.conf` but requires SSL certificates. To enable:
+**Security Logging:** Events logged to console + `error_logs` table (rate_limit_exceeded, invalid_content_type, request_too_large, validation_failed, sql_injection_attempt, xss_attempt).
 
-**Using Let's Encrypt (recommended):**
-```bash
-# 1. Install certbot
-apt-get install certbot python3-certbot-nginx
+**Dependabot:** Weekly PRs for npm/Docker/Actions updates. Manage via `gh pr list --label dependencies`.
 
-# 2. Obtain certificate (replace with your domain)
-certbot --nginx -d yourdomain.com
+**Secret Scanning:** Enable in repo Settings → Code security. Pre-commit: `gitleaks protect --staged`. See `docs/SECRET_SCANNING_SETUP.md`.
 
-# 3. Update nginx.conf:
-#    - Uncomment the HTTPS server block (lines ~53-95)
-#    - Uncomment the HTTP redirect block (lines ~50-56)
-#    - Comment out the HTTP-only server block (lines ~98+)
-
-# 4. Restart nginx
-docker-compose -f docker-compose.prod.yml restart nginx
-```
-
-**Using custom certificates:**
-1. Place your certificate files in a mounted volume
-2. Update `ssl_certificate` and `ssl_certificate_key` paths in nginx.conf
-3. Uncomment the HTTPS server block and HTTP redirect
-4. Restart nginx
-
-**Testing HTTPS:**
-```bash
-curl -I https://yourdomain.com/health
-# Should return 200 OK with Strict-Transport-Security header
-```
-
-#### CodeQL Security Scanning
-
-CodeQL runs automatically on:
-- Every push to `master` branch
-- Every pull request
-- Weekly schedule (Mondays at 10:00 AM UTC)
-- Manual trigger via GitHub Actions UI
-
-**View results:**
-- GitHub Security tab → Code scanning alerts
-- Workflow artifacts: Download SARIF files from Actions runs
-
-**To run locally (requires CodeQL CLI):**
-```bash
-codeql database create codeql-db --language=javascript
-codeql database analyze codeql-db --format=sarif-latest --output=results.sarif
-```
-
-#### Trivy Container Scanning
-
-Trivy scans run automatically on Docker builds and upload results to GitHub Security.
-
-**Manual scan:**
-```bash
-# Scan local image
-docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
-  aquasec/trivy image radio-calico:latest
-
-# Scan with severity filter
-docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
-  aquasec/trivy image --severity CRITICAL,HIGH radio-calico:latest
-```
-
-**View results:**
-- GitHub Security tab → Vulnerability alerts
-- Workflow artifacts: Download JSON reports from Actions runs
-
-#### Content Security Policy
-
-CSP headers are automatically applied to all responses from nginx. The policy:
-- Allows resources only from `self` and whitelisted domains
-- Permits inline scripts/styles (required for Angular)
-- Restricts media/images to CloudFront CDN
-- Enforces HTTPS upgrade for all requests
-
-**Testing CSP:**
-```bash
-curl -I http://localhost:8080/
-# Should include Content-Security-Policy header
-```
-
-**Monitoring CSP violations:**
-Add a `report-uri` directive to the CSP header in nginx.conf to log violations:
-```nginx
-add_header Content-Security-Policy "... report-uri /api/csp-report;" always;
-```
-
-#### Request Validation & Size Limits
-
-Request validation and size limits are automatically enforced on all API endpoints.
-
-**Configuration (`server.js`):**
-```javascript
-const MAX_REQUEST_SIZE = 1024 * 1024;  // 1 MB general limit
-const MAX_ERROR_LOG_SIZE = 10 * 1024;  // 10 KB for error logs
-const MAX_RATING_SIZE = 1024;           // 1 KB for ratings
-```
-
-**Enforced validations:**
-- Content-Type header validation (must be `application/json`)
-- Request size limits per endpoint
-- Required field validation
-- Field type validation (string, number, etc.)
-- Field length limits (e.g., title/artist max 200 chars)
-- Suspicious pattern detection (SQL injection, XSS attempts)
-
-**Testing:**
-```bash
-# Test size limit
-dd if=/dev/zero bs=2M count=1 | curl -X POST http://localhost:3001/api/ratings \
-  -H "Content-Type: application/json" --data-binary @-
-# Should return 413 Payload Too Large
-
-# Test content-type validation
-curl -X POST http://localhost:3001/api/ratings \
-  -H "Content-Type: text/plain" -d '{"title":"test","artist":"test","rating":"up"}'
-# Should return 400 with content-type error
-```
-
-#### Security Event Logging
-
-All security events are automatically logged to console and the `error_logs` database table.
-
-**Logged events:**
-- `rate_limit_exceeded` - When IP exceeds rate limit
-- `invalid_content_type` - Wrong Content-Type header
-- `request_too_large` - Request exceeds size limit
-- `validation_failed` - Input validation failure
-- `sql_injection_attempt` - Detected SQL injection pattern
-- `xss_attempt` - Detected XSS pattern
-
-**Viewing security logs:**
-```bash
-# View console logs
-docker-compose -f docker-compose.prod.yml logs backend | grep "SECURITY EVENT"
-
-# Query database
-psql -U postgres -d radio_calico -c \
-  "SELECT * FROM error_logs WHERE source='app' AND severity='warning' ORDER BY created_at DESC LIMIT 20;"
-```
-
-**Log format:**
-```json
-{
-  "timestamp": "2024-01-15T10:30:00.000Z",
-  "event_type": "rate_limit_exceeded",
-  "client_ip": "192.168.1.100",
-  "method": "POST",
-  "path": "/api/ratings",
-  "user_agent": "curl/7.64.1",
-  "request_count": 101,
-  "limit": 100
-}
-```
-
-#### Dependabot Automated Updates
-
-Dependabot is configured to automatically create PRs for dependency updates.
-
-**Configuration (`.github/dependabot.yml`):**
-- npm dependencies: Weekly on Mondays at 9:00 UTC
-- Docker images: Weekly on Mondays at 10:00 UTC
-- GitHub Actions: Weekly on Mondays at 11:00 UTC
-
-**Managing Dependabot PRs:**
-```bash
-# List Dependabot PRs
-gh pr list --label dependencies
-
-# Merge a Dependabot PR (after review)
-gh pr merge <PR_NUMBER> --squash
-
-# Close and ignore a specific version
-gh pr close <PR_NUMBER>
-# Then add to dependabot.yml ignore list
-```
-
-**Customizing Dependabot:**
-Edit `.github/dependabot.yml` to:
-- Change update schedule
-- Add reviewers/assignees
-- Ignore specific dependencies
-- Group related updates
-
-#### Secret Scanning
-
-See `docs/SECRET_SCANNING_SETUP.md` for detailed setup instructions.
-
-**Quick setup:**
-1. Go to repository Settings → Code security and analysis
-2. Enable "Secret scanning"
-3. Enable "Push protection"
-4. Configure custom patterns (optional)
-
-**Local pre-commit scanning:**
-```bash
-# Install gitleaks
-brew install gitleaks  # macOS
-# or download from https://github.com/gitleaks/gitleaks/releases
-
-# Scan before commit
-gitleaks protect --staged
-```
-
-#### Security Testing
-
-See `docs/SECURITY_TESTING_GUIDE.md` for comprehensive testing procedures.
-
-**Quick OWASP Top 10 tests:**
-```bash
-# SQL Injection test
-curl "http://localhost:3001/api/ratings?title=test'%20OR%201=1--&artist=test"
-
-# Rate limiting test
-for i in {1..105}; do curl http://localhost:3001/api/ratings?title=test&artist=test; done
-
-# Size limit test
-dd if=/dev/zero bs=2M count=1 | curl -X POST http://localhost:3001/api/ratings \
-  -H "Content-Type: application/json" --data-binary @-
-```
-
-**Automated scanning with OWASP ZAP:**
-```bash
-# Start ZAP daemon
-zap.sh -daemon -port 8090 -config api.disablekey=true
-
-# Run baseline scan
-zap-baseline.py -t http://localhost:8080 -r zap-report.html
-```
-
-### Resources
-
-- [OWASP Top 10](https://owasp.org/www-project-top-ten/)
-- [GitHub CodeQL Documentation](https://docs.github.com/en/code-security/code-scanning)
-- [Trivy Container Scanner](https://github.com/aquasecurity/trivy)
-- [NIST Cybersecurity Framework](https://www.nist.gov/cyberframework)
-- [npm Security Best Practices](https://docs.npmjs.com/security-best-practices)
+**Security Testing:** See `docs/SECURITY_TESTING_GUIDE.md` for OWASP Top 10 testing and ZAP scanning procedures.
 
 ## Documentation
 
-Comprehensive guides are available in the `docs/` directory for security, operations, and maintenance.
+**Security guides** (`docs/`):
+- `SECRET_SCANNING_SETUP.md` — GitHub secret scanning + gitleaks pre-commit
+- `SECURITY_TESTING_GUIDE.md` — OWASP Top 10 testing + ZAP scanning
+- `PENETRATION_TESTING_GUIDE.md` — Professional security audit planning
+- `SIEM_INTEGRATION_GUIDE.md` — Elastic Stack, Splunk, Datadog, AWS Security Hub
+- `INCIDENT_RESPONSE.md` — Incident handling workflow + templates
+- `WAF_DEPLOYMENT_GUIDE.md` — Cloudflare, AWS WAF, ModSecurity setup
+- `MONITORING_INTEGRATION.md` — Sentry integration guide
 
-### Security Guides
+**Operations:**
+- `db/README.md` — Error log cleanup cron job (30-day retention)
+- `tests/README.md` — k6 load testing setup
+- `e2e/README.md` — Playwright E2E test suite
 
-**SECRET_SCANNING_SETUP.md** — GitHub Secret Scanning Configuration
-- Enable secret scanning and push protection
-- Configure custom patterns for API keys and tokens
-- Local pre-commit scanning with gitleaks
-- Handling secret scanning alerts
-
-**SECURITY_TESTING_GUIDE.md** — OWASP Top 10 Testing Procedures
-- SQL injection, XSS, CSRF, and authentication testing
-- Rate limiting and input validation verification
-- Automated scanning with OWASP ZAP
-- Security testing checklist for each release
-
-**PENETRATION_TESTING_GUIDE.md** — Professional Security Audit Planning
-- Pre-engagement planning and scope definition
-- Vendor selection criteria
-- Testing phases (reconnaissance, vulnerability assessment, exploitation, reporting)
-- Post-test remediation tracking
-
-**SIEM_INTEGRATION_GUIDE.md** — Security Information and Event Management
-- Integration instructions for Elastic Stack, Splunk, Datadog, and AWS Security Hub
-- Log forwarding configuration
-- Alert rule examples
-- Dashboard templates for security monitoring
-
-**INCIDENT_RESPONSE.md** — Incident Response Procedures
-- Incident severity classification
-- Response team roles and responsibilities
-- Step-by-step incident handling workflow
-- Post-incident review templates
-- Communication templates for stakeholders
-
-**WAF_DEPLOYMENT_GUIDE.md** — Web Application Firewall Deployment
-- Configuration guides for Cloudflare, AWS WAF, and ModSecurity
-- Rule set recommendations (OWASP Core Rule Set)
-- Rate limiting and geo-blocking setup
-- WAF monitoring and tuning
-
-### Database Maintenance
-
-**db/README.md** — Database Maintenance Guide
-- Error log cleanup cron job setup (Linux/macOS/Windows/Docker/Kubernetes)
-- 30-day retention policy configuration
-- Manual cleanup procedures
-- Monitoring database size and cleanup effectiveness
-
-### Core Documentation
-
-**CLAUDE.md** — This file. Guidance for Claude Code when working in this repository.
-
-**README.md** — User-facing project documentation with quick start, features, and deployment instructions.
-
-**SECURITY.md** — Vulnerability reporting procedures and security policy.
+**Core:**
+- `CLAUDE.md` — This file (AI guidance)
+- `README.md` — User documentation
+- `SECURITY.md` — Vulnerability reporting

@@ -10,14 +10,19 @@ WORKDIR /app
 # Install system dependencies required for node-gyp (pg native bindings)
 RUN apk add --no-cache python3 make g++
 
+# Install pnpm globally
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
+
 # Copy package files and install dependencies
 # Separate layer for better caching - dependencies change less frequently than source
-COPY package.json package-lock.json ./
+COPY package.json pnpm-lock.yaml .npmrc ./
 
-# Use BuildKit cache mount for npm cache to speed up rebuilds
-# This persists the npm cache across builds without adding to image size
-RUN --mount=type=cache,target=/root/.npm \
-    npm ci --prefer-offline --no-audit --no-fund --legacy-peer-deps
+# Use BuildKit cache mount for pnpm store to speed up rebuilds
+# This persists the pnpm store across builds without adding to image size
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
+    pnpm install --frozen-lockfile --prefer-offline
 
 # Stage 2: Development target
 # Used for local development with hot-reload support
@@ -41,7 +46,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3001/api/ratings?title=health&artist=check', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
 
 # Default command runs both Angular dev server and API server concurrently
-CMD ["npm", "run", "dev"]
+CMD ["pnpm", "run", "dev"]
 
 # Stage 3: Builder for production
 # Compiles Angular app to static assets
@@ -55,7 +60,7 @@ COPY . .
 
 # Build Angular app with production optimizations
 # Output: dist/radio-calico/browser/
-RUN npm run build:prod
+RUN pnpm run build:prod
 
 # Stage 4: Production target
 # Minimal runtime image with only production dependencies and built assets
@@ -67,10 +72,15 @@ LABEL stage=production
 
 WORKDIR /app
 
+# Install pnpm in production stage
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
+
 # Install production dependencies only using cache mount
-COPY package.json package-lock.json ./
-RUN --mount=type=cache,target=/root/.npm \
-    npm ci --omit=dev --prefer-offline --no-audit --no-fund --legacy-peer-deps
+COPY package.json pnpm-lock.yaml .npmrc ./
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
+    pnpm install --frozen-lockfile --prod --prefer-offline
 
 # Copy backend server
 COPY server.js ./

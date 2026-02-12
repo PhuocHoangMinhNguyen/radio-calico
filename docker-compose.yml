@@ -77,7 +77,7 @@ services:
       - radio-calico-network
 
     # Override CMD to ensure both servers start
-    command: npm run dev
+    command: pnpm run dev
 
   # Adminer - optional database management UI
   adminer:

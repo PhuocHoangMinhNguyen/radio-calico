@@ -12,6 +12,13 @@
     "test": "ng test",
     "test:headless": "ng test --watch=false",
     "test:api": "vitest run --config vitest.config.js",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:report": "playwright show-report",
+    "test:load": "k6 run tests/load-test.js",
+    "test:load:docker": "docker run --rm -v \"%cd%/tests:/tests\" --network=host grafana/k6 run /tests/load-test.js",
+    "test:load:quick": "docker run --rm -v \"%cd%/tests:/tests\" --network=host grafana/k6 run /tests/load-test-quick.js",
     "serve:prod": "npm run build:prod && node server.js"
   },
   "prettier": {
@@ -27,7 +34,7 @@
     ]
   },
   "private": true,
-  "packageManager": "npm@11.6.2",
+  "packageManager": "pnpm@9.15.4",
   "dependencies": {
     "@angular/common": "^21.1.0",
     "@angular/compiler": "^21.1.0",
@@ -47,6 +54,7 @@
     "@angular/build": "^21.1.1",
     "@angular/cli": "^21.1.1",
     "@angular/compiler-cli": "^21.1.0",
+    "@playwright/test": "^1.49.0",
     "concurrently": "^9.2.1",
     "cross-env": "^10.1.0",
     "jsdom": "^28.0.0",

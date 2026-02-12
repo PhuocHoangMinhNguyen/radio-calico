@@ -98,7 +98,11 @@ export class StatsService implements OnDestroy {
   }
 
   private startTracking(): void {
-    if (this.intervalId) return;
+    // Defensive: Clear any existing interval before starting new one
+    if (this.intervalId) {
+      clearInterval(this.intervalId);
+      this.intervalId = null;
+    }
 
     this.intervalId = setInterval(() => {
       this._totalSeconds.update((s) => s + 1);
@@ -134,8 +138,17 @@ export class StatsService implements OnDestroy {
 
   /**
    * Cleanup resources on service destruction
+   * Defensive: Ensures interval is cleared and stats are saved
+   * even if service is destroyed in an unexpected state
    */
   ngOnDestroy(): void {
-    this.stopTracking();
+    // Always clear interval, regardless of current state
+    if (this.intervalId) {
+      clearInterval(this.intervalId);
+      this.intervalId = null;
+    }
+
+    // Save final state
+    this.saveStats();
   }
 }
