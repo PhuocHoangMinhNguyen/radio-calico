@@ -36,6 +36,7 @@ export class PlayerBar implements AfterViewInit, OnDestroy {
   coverUrl = this.hlsService.coverUrl;
   statusMessage = this.hlsService.statusMessage;
   isMuted = this.keyboardService.isMuted;
+  isLoadingPlayer = this.hlsService.isLoadingPlayer;
 
   // Notification signals for mobile toggle
   notificationPermission = this.notificationService.permission;
@@ -50,10 +51,10 @@ export class PlayerBar implements AfterViewInit, OnDestroy {
     return 'volume_up';
   });
 
-  ngAfterViewInit(): void {
+  async ngAfterViewInit(): Promise<void> {
     if (this.audioPlayerRef) {
       try {
-        this.hlsService.initializePlayer(this.audioPlayerRef.nativeElement, this.streamUrl);
+        await this.hlsService.initializePlayer(this.audioPlayerRef.nativeElement, this.streamUrl);
       } catch (error) {
         console.error('[PlayerBar] Failed to initialize HLS player:', error);
         // The HlsPlayerService will handle error state and display error message to user

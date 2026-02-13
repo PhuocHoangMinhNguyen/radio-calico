@@ -131,7 +131,7 @@ describe('HlsPlayerService', () => {
         expect(fetchSpy).toHaveBeenCalledWith(
           'https://d3d4yli4hf5bmh.cloudfront.net/metadatav2.json',
           expect.objectContaining({
-            cache: 'no-store',
+            cache: 'default',
             signal: expect.any(AbortSignal)
           })
         );

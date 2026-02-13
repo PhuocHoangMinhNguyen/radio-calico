@@ -1,5 +1,4 @@
 import { Injectable, signal, computed, inject, isDevMode } from '@angular/core';
-import Hls from 'hls.js';
 import { TrackInfo, StreamMetadata } from '../models/track-info';
 import { AnnouncerService } from './announcer.service';
 import { PreferencesService } from './preferences.service';
@@ -24,7 +23,9 @@ export class HlsPlayerService {
   private readonly errorMonitoring = inject(ErrorMonitoringService);
   private readonly metaService = inject(MetaService);
 
-  private hls: Hls | null = null;
+  // Dynamic HLS.js class (loaded on-demand)
+  private HlsClass: typeof import('hls.js').default | null = null;
+  private hls: InstanceType<typeof import('hls.js').default> | null = null;
   private audioElement: HTMLAudioElement | null = null;
   private metadataIntervalId: ReturnType<typeof setInterval> | null = null;
   private metadataAbortController: AbortController | null = null;
@@ -43,6 +44,7 @@ export class HlsPlayerService {
   private _currentTrack = signal<TrackInfo | null>(null);
   private _recentlyPlayed = signal<TrackInfo[]>([]);
   private _coverUrl = signal<string | null>(null);
+  private _isLoadingPlayer = signal<boolean>(false);
 
   // Stream quality signals
   private _bufferHealth = signal<number>(0); // Seconds of buffered content
@@ -59,6 +61,7 @@ export class HlsPlayerService {
   readonly currentTrack = this._currentTrack.asReadonly();
   readonly recentlyPlayed = this._recentlyPlayed.asReadonly();
   readonly coverUrl = this._coverUrl.asReadonly();
+  readonly isLoadingPlayer = this._isLoadingPlayer.asReadonly();
 
   // Stream quality readonly signals
   readonly bufferHealth = this._bufferHealth.asReadonly();
@@ -88,7 +91,7 @@ export class HlsPlayerService {
   /**
    * Initialize the HLS player with an audio element and stream URL
    */
-  initializePlayer(audioElement: HTMLAudioElement, streamUrl: string): void {
+  async initializePlayer(audioElement: HTMLAudioElement, streamUrl: string): Promise<void> {
     this.audioElement = audioElement;
     this.audioElement.volume = this._volume();
 
@@ -98,8 +101,37 @@ export class HlsPlayerService {
     // Setup Media Session API for lock screen/notification controls
     this.setupMediaSession();
 
+    // Dynamically import HLS.js if not already loaded
+    if (!this.HlsClass) {
+      this._isLoadingPlayer.set(true);
+      this._status.set('initializing');
+      this._statusMessage.set('Loading player...');
+
+      try {
+        const hlsModule = await import('hls.js');
+        this.HlsClass = hlsModule.default;
+        this._isLoadingPlayer.set(false);
+
+        if (isDevMode()) {
+          console.log('[HlsPlayerService] HLS.js loaded dynamically');
+        }
+      } catch (error) {
+        this._isLoadingPlayer.set(false);
+        const errorMessage = 'Failed to load HLS player';
+        this.handleError(errorMessage);
+        this.errorMonitoring.trackError(
+          'app',
+          'fatal',
+          errorMessage,
+          error instanceof Error ? error.message : String(error),
+          { importError: true }
+        );
+        return; // Stop initialization on import failure
+      }
+    }
+
     // Check if HLS is supported
-    if (Hls.isSupported()) {
+    if (this.HlsClass.isSupported()) {
       this.initializeHls(streamUrl);
     } else if (audioElement.canPlayType('application/vnd.apple.mpegurl')) {
       // Native HLS support (Safari)
@@ -119,7 +151,12 @@ export class HlsPlayerService {
    * Initialize HLS.js
    */
   private initializeHls(streamUrl: string): void {
-    this.hls = new Hls({
+    if (!this.HlsClass) {
+      this.handleError('HLS.js not loaded');
+      return;
+    }
+
+    this.hls = new this.HlsClass({
       enableWorker: true,
       lowLatencyMode: true,
       backBufferLength: 90
@@ -129,7 +166,7 @@ export class HlsPlayerService {
     this.hls.attachMedia(this.audioElement!);
 
     // HLS event listeners
-    this.hls.on(Hls.Events.MANIFEST_PARSED, (_event, data) => {
+    this.hls.on(this.HlsClass!.Events.MANIFEST_PARSED, (_event, data) => {
       this._status.set('ready');
       this._statusMessage.set('Ready to play');
       // Set initial bitrate from first level
@@ -142,7 +179,7 @@ export class HlsPlayerService {
     });
 
     // Track fragment load times for latency measurement
-    this.hls.on(Hls.Events.FRAG_LOADED, (_event, data) => {
+    this.hls.on(this.HlsClass!.Events.FRAG_LOADED, (_event, data) => {
       if (data.frag.stats) {
         const loadTime = data.frag.stats.loading.end - data.frag.stats.loading.start;
         this._fragmentLatency.set(Math.round(loadTime));
@@ -150,14 +187,14 @@ export class HlsPlayerService {
     });
 
     // Update bitrate when level changes
-    this.hls.on(Hls.Events.LEVEL_SWITCHED, (_event, data) => {
+    this.hls.on(this.HlsClass!.Events.LEVEL_SWITCHED, (_event, data) => {
       const level = this.hls?.levels[data.level];
       if (level) {
         this._bitrate.set(Math.round(level.bitrate / 1000));
       }
     });
 
-    this.hls.on(Hls.Events.ERROR, (_event, data) => {
+    this.hls.on(this.HlsClass!.Events.ERROR, (_event, data) => {
       const errorId = this.errorMonitoring.trackHlsError(
         data.type,
         data.fatal,
@@ -167,7 +204,7 @@ export class HlsPlayerService {
 
       if (data.fatal) {
         switch (data.type) {
-          case Hls.ErrorTypes.NETWORK_ERROR:
+          case this.HlsClass!.ErrorTypes.NETWORK_ERROR:
             this._status.set('error');
             this._statusMessage.set('Network error - Retrying...');
             this.errorMonitoring.recordRecoveryAttempt(errorId);
@@ -182,7 +219,7 @@ export class HlsPlayerService {
               }
             }, 5000);
             break;
-          case Hls.ErrorTypes.MEDIA_ERROR:
+          case this.HlsClass!.ErrorTypes.MEDIA_ERROR:
             this._status.set('error');
             this._statusMessage.set('Media error - Recovering...');
             this.errorMonitoring.recordRecoveryAttempt(errorId);
@@ -421,7 +458,8 @@ export class HlsPlayerService {
     const signal = this.metadataAbortController.signal;
 
     try {
-      const response = await fetch(METADATA_URL, { cache: 'no-store', signal });
+      // Use 'default' cache policy to allow service worker caching (10s maxAge in ngsw-config.json)
+      const response = await fetch(METADATA_URL, { cache: 'default', signal });
       if (!response.ok) {
         this.metadataFailureCount++;
         this.handleMetadataFailure();
@@ -453,7 +491,8 @@ export class HlsPlayerService {
       };
 
       if (trackChanged) {
-        const newCoverUrl = `${COVER_URL}?t=${Date.now()}`;
+        // Use COVER_URL directly without cache-busting to allow browser and service worker caching
+        const newCoverUrl = COVER_URL;
         this._coverUrl.set(newCoverUrl);
         this.updateMediaSessionMetadata(newTrack, newCoverUrl);
 
@@ -652,5 +691,7 @@ export class HlsPlayerService {
     this._bufferHealth.set(0);
     this._bitrate.set(0);
     this._fragmentLatency.set(0);
+    this._isLoadingPlayer.set(false);
+    // Note: Keep HlsClass loaded for subsequent initializations
   }
 }
