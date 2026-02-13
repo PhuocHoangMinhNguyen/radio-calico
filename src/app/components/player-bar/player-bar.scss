@@ -253,3 +253,24 @@
     display: none;
   }
 }
+
+// Loading spinner animation
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.material-icons.rotating {
+  animation: spin 1s linear infinite;
+}
+
+// Respect reduced motion preference
+@media (prefers-reduced-motion: reduce) {
+  .material-icons.rotating {
+    animation: none;
+  }
+}
