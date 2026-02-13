@@ -28,11 +28,16 @@ export class ErrorMonitoringService {
   // Session ID persists for the lifetime of the page
   private readonly sessionId = this.generateSessionId();
 
-  // Circuit breaker for backend logging
+  // Circuit breaker for backend logging with exponential backoff
   private backendFailureCount = 0;
   private readonly MAX_BACKEND_FAILURES = 3;
   private backendCircuitOpen = false;
   private backendCircuitResetTimeout: ReturnType<typeof setTimeout> | null = null;
+  private backendCircuitResetDelay = 60000; // Start at 60s, doubles on each failure
+  private readonly MAX_CIRCUIT_RESET_DELAY = 600000; // Max 10 minutes
+
+  // External monitoring integration (e.g., Sentry)
+  private externalMonitoringEnabled = typeof window !== 'undefined' && (window as any).Sentry;
 
   readonly errors = this._errors.asReadonly();
   readonly recoveryAttempts = this._recoveryAttempts.asReadonly();
@@ -222,9 +227,13 @@ export class ErrorMonitoringService {
   }
 
   /**
-   * Send error to backend PostgreSQL database with circuit breaker
+   * Send error to external monitoring services (Sentry) and backend
    */
   private sendToExternalService(error: TrackedError): void {
+    // Send to third-party monitoring (e.g., Sentry) first
+    this.sendToThirdPartyMonitoring(error);
+
+    // Then send to backend PostgreSQL database with circuit breaker
     // Circuit breaker: Don't send if circuit is open (backend is down)
     if (this.backendCircuitOpen) {
       // Queue to localStorage as fallback (optional - could implement later)
@@ -247,8 +256,9 @@ export class ErrorMonitoringService {
     })
       .then((response) => {
         if (response.ok) {
-          // Success - reset failure count
+          // Success - reset failure count and backoff delay
           this.backendFailureCount = 0;
+          this.backendCircuitResetDelay = 60000; // Reset to initial delay
         } else {
           // Non-2xx response counts as failure
           this.handleBackendFailure();
@@ -262,7 +272,58 @@ export class ErrorMonitoringService {
   }
 
   /**
-   * Handle backend logging failure with circuit breaker
+   * Send error to third-party monitoring service (e.g., Sentry)
+   * This is called even when circuit breaker is open
+   */
+  private sendToThirdPartyMonitoring(error: TrackedError): void {
+    if (!this.externalMonitoringEnabled) {
+      return;
+    }
+
+    try {
+      const Sentry = (window as any).Sentry;
+
+      // Convert severity to Sentry level
+      const sentryLevel = error.severity === 'info' ? 'info' :
+                         error.severity === 'warning' ? 'warning' :
+                         error.severity === 'fatal' ? 'fatal' : 'error';
+
+      // Send to Sentry
+      Sentry.captureException(new Error(error.message), {
+        level: sentryLevel,
+        tags: {
+          source: error.source,
+          error_id: error.id,
+          session_id: this.sessionId,
+        },
+        extra: {
+          details: error.details,
+          metadata: error.metadata,
+          timestamp: error.timestamp,
+          recovered: error.recovered,
+        },
+      });
+
+      // Add breadcrumb for context
+      Sentry.addBreadcrumb({
+        category: 'error-monitoring',
+        message: error.message,
+        level: sentryLevel,
+        data: {
+          source: error.source,
+          error_id: error.id,
+        },
+      });
+    } catch (err) {
+      // Don't let Sentry integration errors break the app
+      if (isDevMode()) {
+        console.warn('[ErrorMonitor] Failed to send to external monitoring:', err);
+      }
+    }
+  }
+
+  /**
+   * Handle backend logging failure with circuit breaker and exponential backoff
    */
   private handleBackendFailure(): void {
     this.backendFailureCount++;
@@ -271,7 +332,8 @@ export class ErrorMonitoringService {
       // Open circuit - stop sending errors to backend
       this.backendCircuitOpen = true;
       console.warn(
-        `[ErrorMonitor] Circuit breaker opened after ${this.MAX_BACKEND_FAILURES} failures. Backend logging paused for 60 seconds.`
+        `[ErrorMonitor] Circuit breaker opened after ${this.MAX_BACKEND_FAILURES} failures. ` +
+        `Backend logging paused for ${this.backendCircuitResetDelay / 1000} seconds.`
       );
 
       // Clear any existing reset timeout
@@ -279,12 +341,28 @@ export class ErrorMonitoringService {
         clearTimeout(this.backendCircuitResetTimeout);
       }
 
-      // Reset circuit after 60 seconds
+      // Reset circuit after backoff delay (with exponential backoff)
       this.backendCircuitResetTimeout = setTimeout(() => {
         this.backendCircuitOpen = false;
         this.backendFailureCount = 0;
-        console.info('[ErrorMonitor] Circuit breaker closed. Backend logging resumed.');
-      }, 60000);
+        console.info(
+          `[ErrorMonitor] Circuit breaker closed after ${this.backendCircuitResetDelay / 1000}s. ` +
+          'Backend logging resumed. Testing connection...'
+        );
+      }, this.backendCircuitResetDelay);
+
+      // Double the delay for next failure (exponential backoff)
+      // But cap at MAX_CIRCUIT_RESET_DELAY (10 minutes)
+      this.backendCircuitResetDelay = Math.min(
+        this.backendCircuitResetDelay * 2,
+        this.MAX_CIRCUIT_RESET_DELAY
+      );
+
+      if (isDevMode()) {
+        console.log(
+          `[ErrorMonitor] Next circuit breaker delay: ${this.backendCircuitResetDelay / 1000}s`
+        );
+      }
     }
   }
 }

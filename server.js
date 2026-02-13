@@ -23,6 +23,11 @@ const pool = new Pool({
     database: process.env.PGDATABASE || 'radio_calico',
     user: process.env.PGUSER || 'postgres',
     password: process.env.PGPASSWORD,
+    // Connection pool configuration
+    max: 20, // Maximum number of clients in the pool
+    idleTimeoutMillis: 30000, // Close idle clients after 30 seconds
+    connectionTimeoutMillis: 5000, // Timeout when connecting to database
+    statement_timeout: 10000, // Query timeout: 10 seconds
 });
 
 // Log pool errors
@@ -372,7 +377,36 @@ const server = http.createServer(async (req, res) => {
         }
     }
 
-    // Apply rate limiting to all API endpoints
+    // API: GET /api/health - Health check endpoint (no rate limiting)
+    if (req.method === 'GET' && parsedUrl.pathname === '/api/health') {
+        try {
+            // Test database connectivity with timeout
+            const result = await pool.query('SELECT 1 as health_check');
+            if (result.rows[0]?.health_check === 1) {
+                return sendJson(res, 200, {
+                    status: 'healthy',
+                    database: 'connected',
+                    timestamp: new Date().toISOString()
+                });
+            } else {
+                return sendJson(res, 503, {
+                    status: 'unhealthy',
+                    database: 'unexpected_response',
+                    timestamp: new Date().toISOString()
+                });
+            }
+        } catch (err) {
+            console.error('Health check failed:', err.message);
+            return sendJson(res, 503, {
+                status: 'unhealthy',
+                database: 'disconnected',
+                error: err.message,
+                timestamp: new Date().toISOString()
+            });
+        }
+    }
+
+    // Apply rate limiting to all API endpoints (except health)
     if (parsedUrl.pathname.startsWith('/api/')) {
         if (!checkRateLimit(req, res)) {
             return; // Rate limit exceeded, response already sent

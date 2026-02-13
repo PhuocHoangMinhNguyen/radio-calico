@@ -45,7 +45,7 @@ describe('StatsService', () => {
         { provide: HlsPlayerService, useValue: mockHlsService },
       ],
     });
-    service = TestBed.inject(StatsService);
+    // Don't create service here - let each test create it when needed
   });
 
   afterEach(() => {
@@ -54,16 +54,19 @@ describe('StatsService', () => {
   });
 
   it('should be created', () => {
+    service = TestBed.inject(StatsService);
     expect(service).toBeTruthy();
   });
 
   it('should start with zero seconds when localStorage is empty', () => {
+    service = TestBed.inject(StatsService);
     expect(service.totalSeconds()).toBe(0);
     expect(service.totalMinutes()).toBe(0);
     expect(service.totalHours()).toBe(0);
   });
 
   it('should load stats from localStorage on initialization', () => {
+    // Set localStorage data BEFORE creating service
     localStorage.setItem(
       'radio-calico-stats',
       JSON.stringify({
@@ -72,14 +75,7 @@ describe('StatsService', () => {
       })
     );
 
-    // Reset TestBed and create fresh service to trigger loadStats
-    TestBed.resetTestingModule();
-    TestBed.configureTestingModule({
-      providers: [
-        StatsService,
-        { provide: HlsPlayerService, useValue: mockHlsService },
-      ],
-    });
+    // Create service - it should load from localStorage in constructor
     service = TestBed.inject(StatsService);
 
     expect(service.totalSeconds()).toBe(3600);
@@ -87,17 +83,12 @@ describe('StatsService', () => {
   });
 
   it('should handle corrupted JSON in localStorage gracefully', () => {
+    // Set corrupted data BEFORE setting up spy and creating service
     localStorage.setItem('radio-calico-stats', '{not valid json');
 
     const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-    TestBed.resetTestingModule();
-    TestBed.configureTestingModule({
-      providers: [
-        StatsService,
-        { provide: HlsPlayerService, useValue: mockHlsService },
-      ],
-    });
+    // Create service - constructor will try to load and fail gracefully
     service = TestBed.inject(StatsService);
 
     expect(service.totalSeconds()).toBe(0);
@@ -114,6 +105,7 @@ describe('StatsService', () => {
   // -------------------------------------------------------------------------
   describe('tracking behavior', () => {
     it('starts tracking when isPlaying becomes true', () => {
+      service = TestBed.inject(StatsService);
       mockIsPlayingSignal.set(true);
 
       vi.advanceTimersByTime(1000);
@@ -187,6 +179,7 @@ describe('StatsService', () => {
     });
 
     it('saves to localStorage every 30 seconds while playing', () => {
+      service = TestBed.inject(StatsService);
       mockIsPlayingSignal.set(true);
 
       vi.advanceTimersByTime(29000);
@@ -235,6 +228,7 @@ describe('StatsService', () => {
   // -------------------------------------------------------------------------
   describe('reset', () => {
     it('resets totalSeconds to zero and persists to localStorage', () => {
+      service = TestBed.inject(StatsService);
       mockIsPlayingSignal.set(true);
       vi.advanceTimersByTime(15000);
 
@@ -250,6 +244,7 @@ describe('StatsService', () => {
     });
 
     it('restarts tracking after reset if currently playing', () => {
+      service = TestBed.inject(StatsService);
       mockIsPlayingSignal.set(true);
       vi.advanceTimersByTime(10000);
 
@@ -265,6 +260,7 @@ describe('StatsService', () => {
     });
 
     it('does not restart tracking after reset if not playing', () => {
+      service = TestBed.inject(StatsService);
       mockIsPlayingSignal.set(true);
       vi.advanceTimersByTime(10000);
 
@@ -283,6 +279,7 @@ describe('StatsService', () => {
   // -------------------------------------------------------------------------
   describe('computed signals', () => {
     it('computes totalMinutes correctly', () => {
+      service = TestBed.inject(StatsService);
       mockIsPlayingSignal.set(true);
 
       vi.advanceTimersByTime(60_000); // 60 seconds
@@ -293,6 +290,7 @@ describe('StatsService', () => {
     });
 
     it('computes totalHours correctly', () => {
+      service = TestBed.inject(StatsService);
       mockIsPlayingSignal.set(true);
 
       vi.advanceTimersByTime(3600_000); // 3600 seconds
@@ -303,6 +301,7 @@ describe('StatsService', () => {
     });
 
     it('formats time as "X second(s)" when < 60s', () => {
+      service = TestBed.inject(StatsService);
       mockIsPlayingSignal.set(true);
 
       vi.advanceTimersByTime(1000);
@@ -313,6 +312,7 @@ describe('StatsService', () => {
     });
 
     it('formats time as "X minute(s)" when < 1 hour', () => {
+      service = TestBed.inject(StatsService);
       mockIsPlayingSignal.set(true);
 
       vi.advanceTimersByTime(60_000); // 1 minute
@@ -323,6 +323,7 @@ describe('StatsService', () => {
     });
 
     it('formats time as "X hour(s)" when >= 1 hour with no remaining minutes', () => {
+      service = TestBed.inject(StatsService);
       mockIsPlayingSignal.set(true);
 
       vi.advanceTimersByTime(3600_000); // 1 hour
@@ -333,6 +334,7 @@ describe('StatsService', () => {
     });
 
     it('formats time as "X hour(s) Y min" when >= 1 hour with remaining minutes', () => {
+      service = TestBed.inject(StatsService);
       mockIsPlayingSignal.set(true);
 
       vi.advanceTimersByTime(3660_000); // 1 hour 1 minute
@@ -346,10 +348,12 @@ describe('StatsService', () => {
     });
 
     it('returns "Start listening to track your time" when totalSeconds is 0', () => {
+      service = TestBed.inject(StatsService);
       expect(service.displayMessage()).toBe('Start listening to track your time');
     });
 
     it('returns "You\'ve listened for X" when totalSeconds > 0', () => {
+      service = TestBed.inject(StatsService);
       mockIsPlayingSignal.set(true);
 
       vi.advanceTimersByTime(30_000); // 30 seconds
@@ -365,17 +369,12 @@ describe('StatsService', () => {
   // -------------------------------------------------------------------------
   describe('error handling', () => {
     it('handles localStorage errors gracefully when loading', () => {
+      // Set corrupted data BEFORE setting up spy and creating service
       localStorage.setItem('radio-calico-stats', '{not valid json');
 
       const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-      TestBed.resetTestingModule();
-      TestBed.configureTestingModule({
-        providers: [
-          StatsService,
-          { provide: HlsPlayerService, useValue: mockHlsService },
-        ],
-      });
+      // Create service - constructor will try to load and fail gracefully
       service = TestBed.inject(StatsService);
 
       // Service continues with zero stats despite load error
