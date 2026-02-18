@@ -26,9 +26,12 @@
       class="play-btn"
       type="button"
       (click)="onTogglePlayPause()"
-      [attr.aria-label]="isPlaying() ? 'Pause' : 'Play'"
+      [attr.aria-label]="isLoadingPlayer() ? 'Loading player...' : (isPlaying() ? 'Pause' : 'Play')"
+      [disabled]="isLoadingPlayer()"
     >
-      @if (isPlaying()) {
+      @if (isLoadingPlayer()) {
+        <span class="material-icons rotating" aria-hidden="true">refresh</span>
+      } @else if (isPlaying()) {
         <span class="material-icons" aria-hidden="true">pause</span>
       } @else {
         <span class="material-icons" aria-hidden="true">play_arrow</span>
