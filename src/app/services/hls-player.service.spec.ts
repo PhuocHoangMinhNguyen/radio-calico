@@ -296,10 +296,10 @@ describe('HlsPlayerService', () => {
   });
 
   // -------------------------------------------------------------------------
-  // Cover cache-busting test
+  // Cover caching test
   // -------------------------------------------------------------------------
-  describe('cover cache-busting', () => {
-    it('adds timestamp query param to cover URL on track change', async () => {
+  describe('cover caching', () => {
+    it('uses cover URL without cache-busting for service worker caching', async () => {
       const track: StreamMetadata = {
         title: 'Song',
         artist: 'Artist',
@@ -336,8 +336,8 @@ describe('HlsPlayerService', () => {
       await vi.waitFor(() => {
         const coverUrl = service.coverUrl();
         expect(coverUrl).toBeTruthy();
-        // Should contain base URL and timestamp query param
-        expect(coverUrl).toMatch(/^https:\/\/d3d4yli4hf5bmh\.cloudfront\.net\/cover\.jpg\?t=\d+$/);
+        // Should be plain URL without query params to allow caching
+        expect(coverUrl).toBe('https://d3d4yli4hf5bmh.cloudfront.net/cover.jpg');
       });
 
       service.destroy();
