@@ -65,7 +65,7 @@ jobs:
 
       - name: Build and push Docker image (production)
         id: build
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           target: production
@@ -82,7 +82,7 @@ jobs:
 
       - name: Build development image (verification only - push events only)
         if: github.event_name == 'push'
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           target: development
