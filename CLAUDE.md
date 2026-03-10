@@ -62,6 +62,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Radio Calico is a lossless internet radio player built with Angular 21 and HLS.js. It streams audio from a CloudFront-hosted HLS endpoint (`https://d3d4yli4hf5bmh.cloudfront.net/hls/live.m3u8`) at 48kHz/24-bit quality. There is a backend Node.js server (`server.js`) backed by PostgreSQL for ratings and error logging.
 
+**Live URL:** https://radio-calico.onrender.com
+
 **Key Features:**
 - 🎵 Lossless HLS streaming (48kHz/24-bit)
 - 📊 Track ratings with PostgreSQL backend and IP-based deduplication
